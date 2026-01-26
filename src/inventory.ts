@@ -65,6 +65,487 @@ if (!token || !spaceId) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function generateHTMLReport(
+  combined: {
+    spaceId: string;
+    environmentId: string;
+    generatedAt: string;
+    assetsTotal: number;
+    summary: ContentTypeRow[];
+    fields: FieldRow[];
+  },
+  assetsTotal: number,
+  referenceRows: RefRow[],
+  enumRows: EnumRow[]
+): string {
+  const { spaceId, environmentId, generatedAt, summary, fields } = combined;
+
+  // Group fields by content type
+  const fieldsByContentType = fields.reduce((acc, field) => {
+    if (!acc[field.contentTypeId]) {
+      acc[field.contentTypeId] = [];
+    }
+    acc[field.contentTypeId].push(field);
+    return acc;
+  }, {} as Record<string, FieldRow[]>);
+
+  // Group references by content type
+  const refsByContentType = referenceRows.reduce((acc, ref) => {
+    if (!acc[ref.contentTypeId]) {
+      acc[ref.contentTypeId] = [];
+    }
+    acc[ref.contentTypeId].push(ref);
+    return acc;
+  }, {} as Record<string, RefRow[]>);
+
+  // Group enums by content type
+  const enumsByContentType = enumRows.reduce((acc, enumRow) => {
+    if (!acc[enumRow.contentTypeId]) {
+      acc[enumRow.contentTypeId] = [];
+    }
+    acc[enumRow.contentTypeId].push(enumRow);
+    return acc;
+  }, {} as Record<string, EnumRow[]>);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contentful Inventory Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      color: #171F22;
+      line-height: 1.6;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #636467 0%, #666B64 100%);
+      color: #C1D1CF;
+      padding: 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .header .meta {
+      color: #C1D1CF;
+      font-size: 0.95rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-left: 4px solid #748B91;
+    }
+
+    .stat-card h3 {
+      color: #636467;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-card .value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #171F22;
+    }
+
+    .content-types {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .content-types h2 {
+      background: #636467;
+      color: white;
+      padding: 1.5rem;
+      font-size: 1.5rem;
+    }
+
+    .content-type-item {
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .content-type-header {
+      padding: 1.5rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      transition: background 0.2s;
+    }
+
+    .content-type-header:hover {
+      background: #f8f8f8;
+    }
+
+    .content-type-header .left {
+      flex: 1;
+    }
+
+    .content-type-header h3 {
+      color: #171F22;
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .content-type-header .id {
+      color: #748B91;
+      font-size: 0.875rem;
+      font-family: 'Courier New', monospace;
+    }
+
+    .content-type-header .stats {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .content-type-header .stat {
+      text-align: center;
+    }
+
+    .content-type-header .stat-label {
+      color: #636467;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .content-type-header .stat-value {
+      color: #171F22;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    .content-type-details {
+      display: none;
+      background: #f9f9f9;
+      padding: 1.5rem;
+    }
+
+    .content-type-item.expanded .content-type-details {
+      display: block;
+    }
+
+    .content-type-item.expanded .content-type-header {
+      background: #f9f9f9;
+    }
+
+    .fields-table {
+      width: 100%;
+      background: white;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .fields-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .fields-table th {
+      background: #666B64;
+      color: white;
+      padding: 0.75rem;
+      text-align: left;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .fields-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 0.875rem;
+    }
+
+    .fields-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .fields-table tr:hover {
+      background: #f5f5f5;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge.required {
+      background: #C1D1CF;
+      color: #171F22;
+    }
+
+    .badge.localized {
+      background: #748B91;
+      color: white;
+    }
+
+    .badge.array {
+      background: #636467;
+      color: white;
+    }
+
+    .code {
+      font-family: 'Courier New', monospace;
+      background: #f5f5f5;
+      padding: 0.125rem 0.375rem;
+      border-radius: 3px;
+      font-size: 0.875rem;
+    }
+
+    .section-title {
+      color: #636467;
+      font-size: 1rem;
+      margin: 1.5rem 0 0.75rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #C1D1CF;
+    }
+
+    .no-data {
+      color: #748B91;
+      font-style: italic;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .toggle-icon {
+      font-size: 1.5rem;
+      color: #748B91;
+      transition: transform 0.3s;
+    }
+
+    .content-type-item.expanded .toggle-icon {
+      transform: rotate(90deg);
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .content-type-header .stats {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="container">
+      <h1>📦 Contentful Inventory Report</h1>
+      <div class="meta">
+        <strong>Space:</strong> ${spaceId} | 
+        <strong>Environment:</strong> ${environmentId} | 
+        <strong>Generated:</strong> ${new Date(generatedAt).toLocaleString()}
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Content Types</h3>
+        <div class="value">${summary.length}</div>
+      </div>
+      <div class="stat-card">
+        <h3>Total Entries</h3>
+        <div class="value">${summary.reduce((sum, ct) => sum + ct.entries, 0).toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <h3>Total Assets</h3>
+        <div class="value">${assetsTotal.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <h3>Total Fields</h3>
+        <div class="value">${fields.length}</div>
+      </div>
+    </div>
+
+    <div class="content-types">
+      <h2>Content Types</h2>
+      ${summary
+        .map(
+          (ct) => `
+        <div class="content-type-item" id="ct-${ct.contentTypeId}">
+          <div class="content-type-header" onclick="toggleContentType('${ct.contentTypeId}')">
+            <div class="left">
+              <h3>${ct.contentTypeName}</h3>
+              <div class="id">${ct.contentTypeId}</div>
+            </div>
+            <div class="stats">
+              <div class="stat">
+                <div class="stat-label">Entries</div>
+                <div class="stat-value">${ct.entries.toLocaleString()}</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Fields</div>
+                <div class="stat-value">${ct.fields}</div>
+              </div>
+              <div class="toggle-icon">›</div>
+            </div>
+          </div>
+          <div class="content-type-details">
+            ${
+              fieldsByContentType[ct.contentTypeId]?.length > 0
+                ? `
+            <div class="section-title">Fields</div>
+            <div class="fields-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field Name</th>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Attributes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${fieldsByContentType[ct.contentTypeId]
+                    .map(
+                      (field) => `
+                    <tr>
+                      <td><strong>${field.fieldName}</strong></td>
+                      <td><span class="code">${field.fieldId}</span></td>
+                      <td>
+                        <span class="code">${field.type}</span>
+                        ${field.itemsType ? `<span class="code">&lt;${field.itemsType}&gt;</span>` : ""}
+                        ${field.linkType ? `<span class="code">(${field.linkType})</span>` : ""}
+                      </td>
+                      <td>
+                        ${field.required ? '<span class="badge required">Required</span>' : ""}
+                        ${field.localized ? '<span class="badge localized">Localized</span>' : ""}
+                      </td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+            `
+                : '<div class="no-data">No fields defined</div>'
+            }
+
+            ${
+              refsByContentType[ct.contentTypeId]?.length > 0
+                ? `
+            <div class="section-title">References</div>
+            <div class="fields-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field Name</th>
+                    <th>Link Type</th>
+                    <th>Allowed Content Types</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${refsByContentType[ct.contentTypeId]
+                    .map(
+                      (ref) => `
+                    <tr>
+                      <td><strong>${ref.fieldName}</strong> <span class="code">${ref.fieldId}</span></td>
+                      <td><span class="code">${ref.linkType}</span></td>
+                      <td>${ref.allowedContentTypes || '<em>Any</em>'}</td>
+                      <td>${ref.isArray ? '<span class="badge array">Array</span>' : '<span class="badge">Single</span>'}</td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+            `
+                : ""
+            }
+
+            ${
+              enumsByContentType[ct.contentTypeId]?.length > 0
+                ? `
+            <div class="section-title">Enumerations</div>
+            <div class="fields-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field Name</th>
+                    <th>Allowed Values</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${enumsByContentType[ct.contentTypeId]
+                    .map(
+                      (enumRow) => `
+                    <tr>
+                      <td><strong>${enumRow.fieldName}</strong> <span class="code">${enumRow.fieldId}</span></td>
+                      <td>${enumRow.values.split("|").map((v) => `<span class="code">${v}</span>`).join(" ")}</td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+            `
+                : ""
+            }
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  </div>
+
+  <script>
+    function toggleContentType(id) {
+      const element = document.getElementById('ct-' + id);
+      element.classList.toggle('expanded');
+    }
+  </script>
+</body>
+</html>`;
+}
+
 async function main() {
   const client = contentfulManagement.createClient({ accessToken: token });
 
@@ -220,12 +701,17 @@ async function main() {
   };
   await fs.writeFile(path.join(outDir, "inventory.json"), JSON.stringify(combined, null, 2), "utf8");
 
+  // Generate HTML report
+  const html = generateHTMLReport(combined, assetsTotal, referenceRows, enumRows);
+  await fs.writeFile(path.join(outDir, "inventory.html"), html, "utf8");
+
   console.log("Listo ✅");
   console.log("out/inventory_summary.csv");
   console.log("out/inventory_fields.csv");
   console.log("out/inventory_references.csv");
   console.log("out/inventory_enums.csv");
   console.log("out/inventory.json");
+  console.log("out/inventory.html");
   console.log("Assets total:", assetsTotal);
 }
 
