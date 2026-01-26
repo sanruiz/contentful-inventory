@@ -139,7 +139,7 @@ function generateHTMLReport(
     }
 
     .header {
-      background: linear-gradient(135deg, #666B64 0%, #666B64 100%);
+      background: #666B64;
       color: #C1D1CF;
       padding: 2rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
