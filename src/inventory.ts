@@ -417,7 +417,7 @@ function generateHTMLReport(
         .map(
           (ct) => `
         <div class="content-type-item" id="ct-${escapeHtml(ct.contentTypeId)}">
-          <div class="content-type-header" onclick="toggleContentType('${escapeHtml(ct.contentTypeId)}')">
+          <div class="content-type-header" data-ct-id="${escapeHtml(ct.contentTypeId)}">
             <div class="left">
               <h3>${escapeHtml(ct.contentTypeName)}</h3>
               <div class="id">${escapeHtml(ct.contentTypeId)}</div>
@@ -548,10 +548,19 @@ function generateHTMLReport(
   </div>
 
   <script>
-    function toggleContentType(id) {
-      const element = document.getElementById('ct-' + id);
-      element.classList.toggle('expanded');
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.content-type-header').forEach(function(header) {
+        header.addEventListener('click', function() {
+          const ctId = this.getAttribute('data-ct-id');
+          if (ctId) {
+            const element = document.getElementById('ct-' + ctId);
+            if (element) {
+              element.classList.toggle('expanded');
+            }
+          }
+        });
+      });
+    });
   </script>
 </body>
 </html>`;
