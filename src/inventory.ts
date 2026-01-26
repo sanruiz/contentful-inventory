@@ -74,11 +74,10 @@ function generateHTMLReport(
     summary: ContentTypeRow[];
     fields: FieldRow[];
   },
-  assetsTotal: number,
   referenceRows: RefRow[],
   enumRows: EnumRow[]
 ): string {
-  const { spaceId, environmentId, generatedAt, summary, fields } = combined;
+  const { spaceId, environmentId, generatedAt, assetsTotal, summary, fields } = combined;
 
   // Group fields by content type
   const fieldsByContentType = fields.reduce((acc, field) => {
@@ -128,7 +127,7 @@ function generateHTMLReport(
     }
 
     .header {
-      background: linear-gradient(135deg, #636467 0%, #666B64 100%);
+      background: linear-gradient(135deg, #666B64 0%, #666B64 100%);
       color: #C1D1CF;
       padding: 2rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -167,7 +166,7 @@ function generateHTMLReport(
     }
 
     .stat-card h3 {
-      color: #636467;
+      color: #666B64;
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -188,7 +187,7 @@ function generateHTMLReport(
     }
 
     .content-types h2 {
-      background: #636467;
+      background: #666B64;
       color: white;
       padding: 1.5rem;
       font-size: 1.5rem;
@@ -238,7 +237,7 @@ function generateHTMLReport(
     }
 
     .content-type-header .stat-label {
-      color: #636467;
+      color: #666B64;
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -319,7 +318,7 @@ function generateHTMLReport(
     }
 
     .badge.array {
-      background: #636467;
+      background: #666B64;
       color: white;
     }
 
@@ -332,7 +331,7 @@ function generateHTMLReport(
     }
 
     .section-title {
-      color: #636467;
+      color: #666B64;
       font-size: 1rem;
       margin: 1.5rem 0 0.75rem 0;
       padding-bottom: 0.5rem;
@@ -702,7 +701,7 @@ async function main() {
   await fs.writeFile(path.join(outDir, "inventory.json"), JSON.stringify(combined, null, 2), "utf8");
 
   // Generate HTML report
-  const html = generateHTMLReport(combined, assetsTotal, referenceRows, enumRows);
+  const html = generateHTMLReport(combined, referenceRows, enumRows);
   await fs.writeFile(path.join(outDir, "inventory.html"), html, "utf8");
 
   console.log("Listo ✅");
