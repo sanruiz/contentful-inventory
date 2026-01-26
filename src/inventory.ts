@@ -79,6 +79,18 @@ function generateHTMLReport(
 ): string {
   const { spaceId, environmentId, generatedAt, assetsTotal, summary, fields } = combined;
 
+  // HTML escape function to prevent XSS
+  const escapeHtml = (text: string): string => {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
+  };
+
   // Group fields by content type
   const fieldsByContentType = fields.reduce((acc, field) => {
     if (!acc[field.contentTypeId]) {
@@ -372,9 +384,9 @@ function generateHTMLReport(
     <div class="container">
       <h1>📦 Contentful Inventory Report</h1>
       <div class="meta">
-        <strong>Space:</strong> ${spaceId} | 
-        <strong>Environment:</strong> ${environmentId} | 
-        <strong>Generated:</strong> ${new Date(generatedAt).toLocaleString()}
+        <strong>Space:</strong> ${escapeHtml(spaceId)} | 
+        <strong>Environment:</strong> ${escapeHtml(environmentId)} | 
+        <strong>Generated:</strong> ${escapeHtml(new Date(generatedAt).toLocaleString())}
       </div>
     </div>
   </div>
@@ -404,11 +416,11 @@ function generateHTMLReport(
       ${summary
         .map(
           (ct) => `
-        <div class="content-type-item" id="ct-${ct.contentTypeId}">
-          <div class="content-type-header" onclick="toggleContentType('${ct.contentTypeId}')">
+        <div class="content-type-item" id="ct-${escapeHtml(ct.contentTypeId)}">
+          <div class="content-type-header" onclick="toggleContentType('${escapeHtml(ct.contentTypeId)}')">
             <div class="left">
-              <h3>${ct.contentTypeName}</h3>
-              <div class="id">${ct.contentTypeId}</div>
+              <h3>${escapeHtml(ct.contentTypeName)}</h3>
+              <div class="id">${escapeHtml(ct.contentTypeId)}</div>
             </div>
             <div class="stats">
               <div class="stat">
@@ -442,12 +454,12 @@ function generateHTMLReport(
                     .map(
                       (field) => `
                     <tr>
-                      <td><strong>${field.fieldName}</strong></td>
-                      <td><span class="code">${field.fieldId}</span></td>
+                      <td><strong>${escapeHtml(field.fieldName)}</strong></td>
+                      <td><span class="code">${escapeHtml(field.fieldId)}</span></td>
                       <td>
-                        <span class="code">${field.type}</span>
-                        ${field.itemsType ? `<span class="code">&lt;${field.itemsType}&gt;</span>` : ""}
-                        ${field.linkType ? `<span class="code">(${field.linkType})</span>` : ""}
+                        <span class="code">${escapeHtml(field.type)}</span>
+                        ${field.itemsType ? `<span class="code">&lt;${escapeHtml(field.itemsType)}&gt;</span>` : ""}
+                        ${field.linkType ? `<span class="code">(${escapeHtml(field.linkType)})</span>` : ""}
                       </td>
                       <td>
                         ${field.required ? '<span class="badge required">Required</span>' : ""}
@@ -483,9 +495,9 @@ function generateHTMLReport(
                     .map(
                       (ref) => `
                     <tr>
-                      <td><strong>${ref.fieldName}</strong> <span class="code">${ref.fieldId}</span></td>
-                      <td><span class="code">${ref.linkType}</span></td>
-                      <td>${ref.allowedContentTypes || '<em>Any</em>'}</td>
+                      <td><strong>${escapeHtml(ref.fieldName)}</strong> <span class="code">${escapeHtml(ref.fieldId)}</span></td>
+                      <td><span class="code">${escapeHtml(ref.linkType)}</span></td>
+                      <td>${ref.allowedContentTypes ? escapeHtml(ref.allowedContentTypes) : '<em>Any</em>'}</td>
                       <td>${ref.isArray ? '<span class="badge array">Array</span>' : '<span class="badge">Single</span>'}</td>
                     </tr>
                   `
@@ -515,8 +527,8 @@ function generateHTMLReport(
                     .map(
                       (enumRow) => `
                     <tr>
-                      <td><strong>${enumRow.fieldName}</strong> <span class="code">${enumRow.fieldId}</span></td>
-                      <td>${enumRow.values.split("|").map((v) => `<span class="code">${v}</span>`).join(" ")}</td>
+                      <td><strong>${escapeHtml(enumRow.fieldName)}</strong> <span class="code">${escapeHtml(enumRow.fieldId)}</span></td>
+                      <td>${enumRow.values.split("|").map((v) => `<span class="code">${escapeHtml(v)}</span>`).join(" ")}</td>
                     </tr>
                   `
                     )
