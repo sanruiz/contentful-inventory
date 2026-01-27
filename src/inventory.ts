@@ -528,7 +528,7 @@ function generateHTMLReport(
                       (enumRow) => `
                     <tr>
                       <td><strong>${escapeHtml(enumRow.fieldName)}</strong> <span class="code">${escapeHtml(enumRow.fieldId)}</span></td>
-                      <td>${enumRow.values.split("|").map((v) => `<span class="code">${escapeHtml(v)}</span>`).join(" ")}</td>
+                      <td>${enumRow.values.split("|").map((v) => `<span class="code">${escapeHtml(v.trim())}</span>`).join(" ")}</td>
                     </tr>
                   `
                     )
