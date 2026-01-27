@@ -91,6 +91,14 @@ function generateHTMLReport(
     return text.replace(/[&<>"']/g, (m) => map[m]);
   };
 
+  // Sanitize ID to ensure it's valid for HTML id attribute
+  const sanitizeId = (id: string): string => {
+    // Replace invalid characters with hyphens and ensure it starts with a letter
+    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '-');
+    // Ensure it starts with a letter
+    return /^[a-zA-Z]/.test(sanitized) ? sanitized : `id-${sanitized}`;
+  };
+
   // Group fields by content type
   const fieldsByContentType = fields.reduce((acc, field) => {
     if (!acc[field.contentTypeId]) {
@@ -220,6 +228,12 @@ function generateHTMLReport(
     }
 
     .content-type-header:hover {
+      background: #f8f8f8;
+    }
+
+    .content-type-header:focus {
+      outline: 2px solid #748B91;
+      outline-offset: -2px;
       background: #f8f8f8;
     }
 
@@ -415,9 +429,16 @@ function generateHTMLReport(
       <h2>Content Types</h2>
       ${summary
         .map(
-          (ct) => `
-        <div class="content-type-item" id="ct-${escapeHtml(ct.contentTypeId)}">
-          <div class="content-type-header" data-ct-id="${escapeHtml(ct.contentTypeId)}">
+          (ct) => {
+            const sanitizedId = sanitizeId(ct.contentTypeId);
+            return `
+        <div class="content-type-item" id="ct-${sanitizedId}">
+          <div class="content-type-header" 
+               data-ct-id="${sanitizedId}"
+               role="button"
+               tabindex="0"
+               aria-expanded="false"
+               aria-controls="ct-details-${sanitizedId}">
             <div class="left">
               <h3>${escapeHtml(ct.contentTypeName)}</h3>
               <div class="id">${escapeHtml(ct.contentTypeId)}</div>
@@ -425,16 +446,16 @@ function generateHTMLReport(
             <div class="stats">
               <div class="stat">
                 <div class="stat-label">Entries</div>
-                <div class="stat-value">${(ct.entries ?? 0).toLocaleString()}</div>
+                <div class="stat-value">${ct.entries.toLocaleString()}</div>
               </div>
               <div class="stat">
                 <div class="stat-label">Fields</div>
-                <div class="stat-value">${ct.fields ?? 0}</div>
+                <div class="stat-value">${ct.fields}</div>
               </div>
               <div class="toggle-icon">›</div>
             </div>
           </div>
-          <div class="content-type-details">
+          <div class="content-type-details" id="ct-details-${sanitizedId}">
             ${
               fieldsByContentType[ct.contentTypeId]?.length > 0
                 ? `
@@ -541,7 +562,8 @@ function generateHTMLReport(
             }
           </div>
         </div>
-      `
+      `;
+          }
         )
         .join("")}
     </div>
@@ -549,14 +571,31 @@ function generateHTMLReport(
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Toggle function for content type sections
+      function toggleSection(header) {
+        const ctId = header.getAttribute('data-ct-id');
+        if (ctId) {
+          const element = document.getElementById('ct-' + ctId);
+          if (element) {
+            const isExpanded = element.classList.contains('expanded');
+            element.classList.toggle('expanded');
+            header.setAttribute('aria-expanded', !isExpanded ? 'true' : 'false');
+          }
+        }
+      }
+
+      // Add click and keyboard event listeners
       document.querySelectorAll('.content-type-header').forEach(function(header) {
+        // Click event
         header.addEventListener('click', function() {
-          const ctId = this.getAttribute('data-ct-id');
-          if (ctId) {
-            const element = document.getElementById('ct-' + ctId);
-            if (element) {
-              element.classList.toggle('expanded');
-            }
+          toggleSection(this);
+        });
+        
+        // Keyboard event (Enter and Space)
+        header.addEventListener('keydown', function(event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleSection(this);
           }
         });
       });
