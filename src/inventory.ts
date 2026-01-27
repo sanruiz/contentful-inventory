@@ -413,7 +413,7 @@ function generateHTMLReport(
       </div>
       <div class="stat-card">
         <h3>Total Entries</h3>
-        <div class="value">${summary.reduce((sum, ct) => sum + ct.entries, 0).toLocaleString()}</div>
+        <div class="value">${summary.reduce((sum, ct) => sum + (ct.entries ?? 0), 0).toLocaleString()}</div>
       </div>
       <div class="stat-card">
         <h3>Total Assets</h3>
