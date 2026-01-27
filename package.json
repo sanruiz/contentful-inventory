@@ -1,15 +1,26 @@
 {
   "name": "contentful-inventory",
   "version": "1.0.0",
-  "description": "",
+  "description": "Generate a visual HTML report of your Contentful space's content model",
   "main": "index.js",
   "scripts": {
     "inventory": "tsx src/inventory.ts",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "contentful",
+    "cms",
+    "content-model",
+    "inventory",
+    "documentation",
+    "report"
+  ],
+  "author": "sanruiz",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sanruiz/contentful-inventory.git"
+  },
   "type": "module",
   "dependencies": {
     "contentful-management": "^11.68.0",
