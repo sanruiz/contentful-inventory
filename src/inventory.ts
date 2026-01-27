@@ -425,11 +425,11 @@ function generateHTMLReport(
             <div class="stats">
               <div class="stat">
                 <div class="stat-label">Entries</div>
-                <div class="stat-value">${ct.entries.toLocaleString()}</div>
+                <div class="stat-value">${(ct.entries ?? 0).toLocaleString()}</div>
               </div>
               <div class="stat">
                 <div class="stat-label">Fields</div>
-                <div class="stat-value">${ct.fields}</div>
+                <div class="stat-value">${ct.fields ?? 0}</div>
               </div>
               <div class="toggle-icon">›</div>
             </div>
