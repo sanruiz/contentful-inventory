@@ -641,25 +641,34 @@ async function main() {
         localized: !!f.localized,
         itemsType: (f as any).items?.type || "",
         linkType: (f as any).linkType || "",
-        validations: (f.validations || []).map((v: any) => JSON.stringify(v)).join(" | ")
+        validations: (f.validations || [])
+          .map((v: any) => JSON.stringify(v))
+          .join(" | "),
       });
 
       // enum validations ("in")
-      const enumValidation = (f.validations || []).find((v: any) => Array.isArray(v?.in));
+      const enumValidation = (f.validations || []).find((v: any) =>
+        Array.isArray(v?.in),
+      );
       if (enumValidation?.in?.length) {
         enumRows.push({
           contentTypeId: ctId,
           contentTypeName: ctName,
           fieldId: f.id,
           fieldName: f.name,
-          values: enumValidation.in.join("|")
+          values: enumValidation.in.join("|"),
         });
       }
 
       // references: single Link fields
-      if ((f as any).type === "Link" && (((f as any).linkType === "Entry") || ((f as any).linkType === "Asset"))) {
+      if (
+        (f as any).type === "Link" &&
+        ((f as any).linkType === "Entry" || (f as any).linkType === "Asset")
+      ) {
         const allowed = (f.validations || [])
-          .flatMap((v: any) => (Array.isArray(v?.linkContentType) ? v.linkContentType : []))
+          .flatMap((v: any) =>
+            Array.isArray(v?.linkContentType) ? v.linkContentType : [],
+          )
           .join("|");
 
         referenceRows.push({
@@ -669,7 +678,7 @@ async function main() {
           fieldName: f.name,
           linkType: (f as any).linkType,
           allowedContentTypes: allowed,
-          isArray: false
+          isArray: false,
         });
       }
 
@@ -677,8 +686,10 @@ async function main() {
       if ((f as any).type === "Array" && (f as any).items?.type === "Link") {
         const lt = (f as any).items?.linkType;
         if (lt === "Entry" || lt === "Asset") {
-          const allowed = (((f as any).items?.validations) || [])
-            .flatMap((v: any) => (Array.isArray(v?.linkContentType) ? v.linkContentType : []))
+          const allowed = ((f as any).items?.validations || [])
+            .flatMap((v: any) =>
+              Array.isArray(v?.linkContentType) ? v.linkContentType : [],
+            )
             .join("|");
 
           referenceRows.push({
@@ -688,7 +699,7 @@ async function main() {
             fieldName: f.name,
             linkType: lt,
             allowedContentTypes: allowed,
-            isArray: true
+            isArray: true,
           });
         }
       }
@@ -700,7 +711,7 @@ async function main() {
       contentTypeId: ctId,
       contentTypeName: ctName,
       entries: entriesRes.total,
-      fields: (ct.fields || []).length
+      fields: (ct.fields || []).length,
     });
 
     // pequeño throttle para evitar rate limit
@@ -713,7 +724,12 @@ async function main() {
   const outDir = path.join(process.cwd(), "out");
   await fs.mkdir(outDir, { recursive: true });
 
-  const summaryCsv = toCSV(summaryRows, ["contentTypeId", "contentTypeName", "entries", "fields"]);
+  const summaryCsv = toCSV(summaryRows, [
+    "contentTypeId",
+    "contentTypeName",
+    "entries",
+    "fields",
+  ]);
   const fieldsCsv = toCSV(fieldRows, [
     "contentTypeId",
     "contentTypeName",
@@ -724,7 +740,7 @@ async function main() {
     "localized",
     "itemsType",
     "linkType",
-    "validations"
+    "validations",
   ]);
 
   const referencesCsv = toCSV(referenceRows, [
@@ -734,7 +750,7 @@ async function main() {
     "fieldName",
     "linkType",
     "allowedContentTypes",
-    "isArray"
+    "isArray",
   ]);
 
   const enumsCsv = toCSV(enumRows, [
@@ -742,13 +758,29 @@ async function main() {
     "contentTypeName",
     "fieldId",
     "fieldName",
-    "values"
+    "values",
   ]);
 
-  await fs.writeFile(path.join(outDir, "inventory_summary.csv"), summaryCsv, "utf8");
-  await fs.writeFile(path.join(outDir, "inventory_fields.csv"), fieldsCsv, "utf8");
-  await fs.writeFile(path.join(outDir, "inventory_references.csv"), referencesCsv, "utf8");
-  await fs.writeFile(path.join(outDir, "inventory_enums.csv"), enumsCsv, "utf8");
+  await fs.writeFile(
+    path.join(outDir, "inventory_summary.csv"),
+    summaryCsv,
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(outDir, "inventory_fields.csv"),
+    fieldsCsv,
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(outDir, "inventory_references.csv"),
+    referencesCsv,
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(outDir, "inventory_enums.csv"),
+    enumsCsv,
+    "utf8",
+  );
 
   const combined = {
     spaceId,
@@ -756,13 +788,237 @@ async function main() {
     generatedAt: new Date().toISOString(),
     assetsTotal,
     summary: summaryRows,
-    fields: fieldRows
+    fields: fieldRows,
   };
-  await fs.writeFile(path.join(outDir, "inventory.json"), JSON.stringify(combined, null, 2), "utf8");
+  await fs.writeFile(
+    path.join(outDir, "inventory.json"),
+    JSON.stringify(combined, null, 2),
+    "utf8",
+  );
 
   // Generate HTML report
   const html = generateHTMLReport(combined, referenceRows, enumRows);
   await fs.writeFile(path.join(outDir, "inventory.html"), html, "utf8");
+
+  // --- Listar páginas (entries) con título, slug y contenido (componentes) ---
+  // Detectar content type de página (por nombre o id)
+  const pageContentType = contentTypes.find(
+    (ct) =>
+      ct.sys.id.toLowerCase().includes("pagina") ||
+      ct.sys.id.toLowerCase().includes("page") ||
+      (ct.name &&
+        (ct.name.toLowerCase().includes("pagina") ||
+          ct.name.toLowerCase().includes("page"))),
+  );
+
+  if (pageContentType) {
+    const pageCtId = pageContentType.sys.id;
+    // Detectar campos relevantes
+    const titleField = pageContentType.fields.find(
+      (f) =>
+        f.id.toLowerCase().includes("title") ||
+        f.name.toLowerCase().includes("título") ||
+        f.name.toLowerCase().includes("titulo"),
+    );
+    const slugField = pageContentType.fields.find((f) =>
+      f.id.toLowerCase().includes("slug"),
+    );
+    // Buscar campo de componentes (content, components, contenido, etc)
+    const contentField = pageContentType.fields.find((f) =>
+      ["content", "components", "contenido", "cuerpo"].some(
+        (k) =>
+          f.id.toLowerCase().includes(k) || f.name.toLowerCase().includes(k),
+      ),
+    );
+
+    // Obtener todas las páginas (entries)
+    const allPages = [];
+    let skip = 0;
+    const limit = 100;
+    let total = 0;
+    do {
+      const entriesRes = await env.getEntries({
+        content_type: pageCtId,
+        skip,
+        limit,
+      });
+      total = entriesRes.total;
+      for (const entry of entriesRes.items) {
+        allPages.push({
+          id: entry.sys.id,
+          title: titleField
+            ? entry.fields[titleField.id]?.[entry.sys.locale || "es-ES"] ||
+              entry.fields[titleField.id]?.[
+                Object.keys(entry.fields[titleField.id] || {})[0]
+              ]
+            : "",
+          slug: slugField
+            ? entry.fields[slugField.id]?.[entry.sys.locale || "es-ES"] ||
+              entry.fields[slugField.id]?.[
+                Object.keys(entry.fields[slugField.id] || {})[0]
+              ]
+            : "",
+          content: contentField
+            ? entry.fields[contentField.id]?.[entry.sys.locale || "es-ES"] ||
+              entry.fields[contentField.id]?.[
+                Object.keys(entry.fields[contentField.id] || {})[0]
+              ]
+            : "",
+        });
+      }
+      skip += limit;
+    } while (skip < total);
+
+    // Exportar CSV y JSON
+    const pagesCsv = toCSV(allPages, ["id", "title", "slug", "content"]);
+    await fs.writeFile(path.join(outDir, "pages_list.csv"), pagesCsv, "utf8");
+    await fs.writeFile(
+      path.join(outDir, "pages_list.json"),
+      JSON.stringify(allPages, null, 2),
+      "utf8",
+    );
+    console.log("out/pages_list.csv");
+    console.log("out/pages_list.json");
+  } else {
+    console.log("No se encontró un content type de página (page/pagina)");
+  }
+
+  // --- Extraer todas las páginas memory-care-in-{state} con todos los campos y componentes ---
+  async function exportMemoryCareStatePages(env: any, outDir: string) {
+    // Buscar el content type de página
+    const ctRes = await env.getContentTypes({ limit: 1000 });
+    const contentTypes = ctRes.items;
+    const pageContentType = contentTypes.find(
+      (ct: any) =>
+        ct.sys.id.toLowerCase().includes("pagina") ||
+        ct.sys.id.toLowerCase().includes("page") ||
+        (ct.name &&
+          (ct.name.toLowerCase().includes("pagina") ||
+            ct.name.toLowerCase().includes("page"))),
+    );
+    if (!pageContentType) {
+      console.log("No se encontró un content type de página (page/pagina)");
+      return;
+    }
+    const pageCtId = pageContentType.sys.id;
+    // Obtener todas las páginas
+    const allPages: Record<string, any>[] = [];
+    let skip = 0;
+    const limit = 100;
+    let total = 0;
+    do {
+      const entriesRes = await env.getEntries({
+        content_type: pageCtId,
+        skip,
+        limit,
+      });
+      total = entriesRes.total;
+      for (const entry of entriesRes.items) {
+        // Filtrar por slug memory-care-in-*
+        const slug =
+          entry.fields.slug?.[entry.sys.locale || "en-US"] ||
+          entry.fields.slug?.[Object.keys(entry.fields.slug || {})[0]] ||
+          "";
+        if (/^memory-care-in-/.test(slug)) {
+          // Extraer todos los campos
+          const pageData: Record<string, any> = { id: entry.sys.id, slug };
+          for (const fieldId of Object.keys(entry.fields)) {
+            const value = entry.fields[fieldId];
+            // Si es un objeto de locales, tomar el valor principal
+            pageData[fieldId] =
+              typeof value === "object" && value !== null
+                ? value[entry.sys.locale || "en-US"] ||
+                  value[Object.keys(value)[0]]
+                : value;
+          }
+          allPages.push(pageData);
+        }
+      }
+      skip += limit;
+    } while (skip < total);
+    // Exportar CSV y JSON
+    const headers = Object.keys(allPages[0] || { id: "", slug: "" });
+    const pagesCsv = toCSV(allPages, headers);
+    await fs.writeFile(
+      path.join(outDir, "memory_care_state_pages.csv"),
+      pagesCsv,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(outDir, "memory_care_state_pages.json"),
+      JSON.stringify(allPages, null, 2),
+      "utf8",
+    );
+    console.log("out/memory_care_state_pages.csv");
+    console.log("out/memory_care_state_pages.json");
+  }
+
+  // --- Extraer todas las páginas {city}-{state}-facilities con todos los campos y componentes ---
+  async function exportCityFacilityPages(env: any, outDir: string) {
+    const ctRes = await env.getContentTypes({ limit: 1000 });
+    const contentTypes = ctRes.items;
+    const pageContentType = contentTypes.find(
+      (ct: any) =>
+        ct.sys.id.toLowerCase().includes("pagina") ||
+        ct.sys.id.toLowerCase().includes("page") ||
+        (ct.name &&
+          (ct.name.toLowerCase().includes("pagina") ||
+            ct.name.toLowerCase().includes("page"))),
+    );
+    if (!pageContentType) {
+      console.log("No se encontró un content type de página (page/pagina)");
+      return;
+    }
+    const pageCtId = pageContentType.sys.id;
+    const allPages: Record<string, any>[] = [];
+    let skip = 0;
+    const limit = 100;
+    let total = 0;
+    do {
+      const entriesRes = await env.getEntries({
+        content_type: pageCtId,
+        skip,
+        limit,
+      });
+      total = entriesRes.total;
+      for (const entry of entriesRes.items) {
+        const slug =
+          entry.fields.slug?.[entry.sys.locale || "en-US"] ||
+          entry.fields.slug?.[Object.keys(entry.fields.slug || {})[0]] ||
+          "";
+        if (/^[a-z-]+-[a-z]{2}-facilities$/.test(slug)) {
+          const pageData: Record<string, any> = { id: entry.sys.id, slug };
+          for (const fieldId of Object.keys(entry.fields)) {
+            const value = entry.fields[fieldId];
+            pageData[fieldId] =
+              typeof value === "object" && value !== null
+                ? value[entry.sys.locale || "en-US"] ||
+                  value[Object.keys(value)[0]]
+                : value;
+          }
+          allPages.push(pageData);
+        }
+      }
+      skip += limit;
+    } while (skip < total);
+    const headers = Object.keys(allPages[0] || { id: "", slug: "" });
+    const pagesCsv = toCSV(allPages, headers);
+    await fs.writeFile(
+      path.join(outDir, "city_facility_pages.csv"),
+      pagesCsv,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(outDir, "city_facility_pages.json"),
+      JSON.stringify(allPages, null, 2),
+      "utf8",
+    );
+    console.log("out/city_facility_pages.csv");
+    console.log("out/city_facility_pages.json");
+  }
+
+  await exportMemoryCareStatePages(env, outDir);
+  await exportCityFacilityPages(env, outDir);
 
   console.log("Listo ✅");
   console.log("out/inventory_summary.csv");
