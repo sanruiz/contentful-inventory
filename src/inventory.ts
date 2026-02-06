@@ -1017,8 +1017,133 @@ async function main() {
     console.log("out/city_facility_pages.json");
   }
 
+  // --- Extraer páginas corporativas específicas ---
+  async function exportCorporatePages(env: any, outDir: string) {
+    const corporatePages = [
+      { title: "About MemoryCare.com", slug: "about-us" },
+      { title: "Contact MemoryCare.com", slug: "contact" },
+      { title: "Control Your Information", slug: "control-your-information" },
+      { title: "Do Not Sell My Personal Information", slug: "do-not-sell" },
+      { title: "Privacy Policy", slug: "privacy" },
+      { title: "Terms and Conditions", slug: "terms" },
+      { title: "Page Not Found", slug: "error" },
+      { title: "Internal Server Error", slug: "server-error" },
+    ];
+
+    const ctRes = await env.getContentTypes({ limit: 1000 });
+    const contentTypes = ctRes.items;
+    const pageContentType = contentTypes.find(
+      (ct: any) =>
+        ct.sys.id.toLowerCase().includes("pagina") ||
+        ct.sys.id.toLowerCase().includes("page") ||
+        (ct.name &&
+          (ct.name.toLowerCase().includes("pagina") ||
+            ct.name.toLowerCase().includes("page"))),
+    );
+
+    if (!pageContentType) {
+      console.log(
+        "No se encontró un content type de página (page/pagina) para exportar páginas corporativas",
+      );
+      return;
+    }
+
+    const pageCtId = pageContentType.sys.id;
+    const targetSlugs = corporatePages.map((p) => p.slug);
+    const foundPages: Record<string, any>[] = [];
+
+    // Buscar páginas por cada slug corporativo
+    for (const targetSlug of targetSlugs) {
+      try {
+        const entriesRes = await env.getEntries({
+          content_type: pageCtId,
+          "fields.slug": targetSlug,
+          limit: 1,
+        });
+
+        if (entriesRes.items.length > 0) {
+          const entry = entriesRes.items[0];
+          const pageData: Record<string, any> = {
+            id: entry.sys.id,
+            slug: targetSlug,
+            found: true,
+          };
+
+          // Extraer todos los campos
+          for (const fieldId of Object.keys(entry.fields)) {
+            const value = entry.fields[fieldId];
+            // Si es un objeto de locales, tomar el valor principal
+            pageData[fieldId] =
+              typeof value === "object" && value !== null
+                ? value[entry.sys.locale || "en-US"] ||
+                  value[Object.keys(value)[0]]
+                : value;
+          }
+          foundPages.push(pageData);
+        } else {
+          // Página no encontrada, agregar entrada vacía
+          const corpPage = corporatePages.find((p) => p.slug === targetSlug);
+          foundPages.push({
+            id: "",
+            slug: targetSlug,
+            expectedTitle: corpPage?.title || "",
+            found: false,
+            status: "NOT_FOUND",
+          });
+        }
+
+        // Pequeño delay para evitar rate limiting
+        await sleep(100);
+      } catch (error) {
+        console.error(`Error buscando página ${targetSlug}:`, error);
+        foundPages.push({
+          id: "",
+          slug: targetSlug,
+          found: false,
+          error: error?.toString() || "Unknown error",
+          status: "ERROR",
+        });
+      }
+    }
+
+    // Exportar CSV y JSON
+    const headers =
+      foundPages.length > 0
+        ? Object.keys(foundPages[0])
+        : ["id", "slug", "found", "status"];
+
+    // Asegurar que todas las páginas tengan las mismas propiedades
+    const normalizedPages = foundPages.map((page) => {
+      const normalized: Record<string, any> = {};
+      for (const header of headers) {
+        normalized[header] = page[header] || "";
+      }
+      return normalized;
+    });
+
+    const pagesCsv = toCSV(normalizedPages, headers);
+    await fs.writeFile(
+      path.join(outDir, "corporate_pages.csv"),
+      pagesCsv,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(outDir, "corporate_pages.json"),
+      JSON.stringify(normalizedPages, null, 2),
+      "utf8",
+    );
+
+    const foundCount = foundPages.filter((p) => p.found).length;
+    console.log(
+      `📄 Páginas corporativas encontradas: ${foundCount}/${corporatePages.length}`,
+    );
+    console.log("out/corporate_pages.csv");
+    console.log("out/corporate_pages.json");
+  }
+
   await exportMemoryCareStatePages(env, outDir);
   await exportCityFacilityPages(env, outDir);
+  await exportCorporatePages(env, outDir);
 
   console.log("Listo ✅");
   console.log("out/inventory_summary.csv");
