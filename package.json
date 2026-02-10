@@ -12,6 +12,9 @@
     "install-plugin": "node src/wordpress/install-plugin.js",
     "test-connection": "node src/utils/test-connection.js",
     "restore-content": "node src/migration/restore-content.js",
+    "import-guides": "node src/migration/import-guides.js",
+    "extract-guide-tables": "node src/migration/extract-guide-tables.js",
+    "analyze-guides": "node src/contentful/analyze-guides.js",
     "build": "tsc",
     "dev": "tsx --watch src/inventory.ts",
     "clean": "rm -rf out/* temp/*"

@@ -3,7 +3,7 @@
  * Plugin Name: Contentful Tables
  * Plugin URI: https://github.com/sanruiz/contentful-inventory
  * Description: Displays Contentful tables using shortcodes for headless WordPress setups
- * Version: 1.0.0
+ * Version: 2.0.0
  * Author: Santiago Ramirez
  * License: GPL v2 or later
  * Text Domain: contentful-tables
@@ -17,11 +17,17 @@ if (!defined('ABSPATH')) {
 class ContentfulTablesPlugin {
     
     private $tables_data = [];
-    private $plugin_version = '1.0.0';
+    private $plugin_version = '2.0.0';
     
     public function __construct() {
         add_action('init', [$this, 'init']);
-        add_shortcode('contentful-table', [$this, 'render_table_shortcode']);
+
+        // Register shortcodes with both underscore and hyphen variants
+        add_shortcode('contentful_table', [$this, 'render_table_shortcode']);
+        add_shortcode('contentful-table', [$this, 'render_table_shortcode']); // backward compat
+        add_shortcode('contentful_toc', [$this, 'render_toc_shortcode']);
+        add_shortcode('contentful-toc', [$this, 'render_toc_shortcode']); // backward compat
+
         add_action('wp_enqueue_scripts', [$this, 'enqueue_styles']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         
@@ -305,6 +311,41 @@ class ContentfulTablesPlugin {
                 padding: 6px 8px;
             }
         }
+        
+        /* TOC sticky variant */
+        .contentful-table-of-contents.toc-sticky {
+            position: sticky;
+            top: 20px;
+            z-index: 10;
+        }
+        
+        /* TOC style variants */
+        .contentful-table-of-contents.toc-style-list .toc-list {
+            list-style: disc;
+            padding-left: 20px;
+        }
+        
+        .contentful-table-of-contents.toc-style-list .toc-list li {
+            border-bottom: none;
+            padding: 4px 0;
+        }
+        
+        .contentful-table-of-contents .toc-title {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.2em;
+        }
+        
+        /* Table links styling */
+        .contentful-table a {
+            color: #0073aa;
+            text-decoration: none;
+        }
+        
+        .contentful-table a:hover {
+            text-decoration: underline;
+            color: #005a87;
+        }
         ';
         
         wp_add_inline_style('contentful-tables', $css);
@@ -366,7 +407,12 @@ class ContentfulTablesPlugin {
                             <strong>Table ID:</strong> <?php echo esc_html($table_id); ?><br>
                             <strong>Type:</strong> <?php echo esc_html($table_data['type'] ?? 'Unknown'); ?><br>
                             <strong>Title:</strong> <?php echo esc_html($table_data['title'] ?? 'No title'); ?><br>
-                            <strong>Shortcode:</strong> <code>[contentful-table id="<?php echo esc_attr($table_id); ?>"]</code>
+                            <strong>Shortcode:</strong> 
+                            <?php if (($table_data['type'] ?? '') === 'tableOfContents'): ?>
+                                <code>[contentful_toc id="<?php echo esc_attr($table_id); ?>"]</code>
+                            <?php else: ?>
+                                <code>[contentful_table id="<?php echo esc_attr($table_id); ?>"]</code>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -374,14 +420,20 @@ class ContentfulTablesPlugin {
             
             <h2>Usage Examples</h2>
             <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
-Basic usage:
-[contentful-table id="XBIbkCm53nytLcsPx3jlw"]
+Data table:
+[contentful_table id="XBIbkCm53nytLcsPx3jlw"]
+
+Table of contents:
+[contentful_toc id="2dvEbjLfveBiFUb9PsLxFE"]
 
 With custom CSS class:
-[contentful-table id="3JnIHQENe4ZtihjpWwphGI" class="my-custom-table"]
+[contentful_table id="3JnIHQENe4ZtihjpWwphGI" class="my-custom-table"]
 
 With custom title:
-[contentful-table id="408uTkJfTRYN5S7SCmIC5t" title="Custom Table Title"]
+[contentful_table id="408uTkJfTRYN5S7SCmIC5t" title="Custom Table Title"]
+
+Legacy format (also supported):
+[contentful-table id="XBIbkCm53nytLcsPx3jlw"]
             </pre>
             
             <h2>Plugin Information</h2>
@@ -428,21 +480,21 @@ With custom title:
     }
     
     /**
-     * Render table shortcode
+     * Render table shortcode [contentful_table id="..."] or [contentful-table id="..."]
      */
     public function render_table_shortcode($atts) {
         $atts = shortcode_atts([
             'id' => '',
             'class' => '',
             'title' => ''
-        ], $atts, 'contentful-table');
+        ], $atts, 'contentful_table');
         
         $table_id = sanitize_text_field($atts['id']);
         $custom_class = sanitize_text_field($atts['class']);
         $custom_title = sanitize_text_field($atts['title']);
         
         if (empty($table_id)) {
-            return '<div class="contentful-error">Error: No table ID specified. Usage: [contentful-table id="your-table-id"]</div>';
+            return '<div class="contentful-error">Error: No table ID specified. Usage: [contentful_table id="your-table-id"]</div>';
         }
         
         if (!isset($this->tables_data[$table_id])) {
@@ -455,8 +507,14 @@ With custom title:
         if (!empty($custom_title)) {
             $table_data['title'] = $custom_title;
         }
-        
-        $html = $this->render_table($table_id, $table_data);
+
+        // Route to appropriate renderer based on type
+        $type = $table_data['type'] ?? '';
+        if ($type === 'tableOfContents') {
+            $html = $this->render_table_of_contents($table_data, $table_id);
+        } else {
+            $html = $this->render_data_table($table_data, $table_id);
+        }
         
         // Add custom CSS class if provided
         if (!empty($custom_class)) {
@@ -469,7 +527,52 @@ With custom title:
         
         return $html;
     }
-    
+
+    /**
+     * Render TOC shortcode [contentful_toc id="..."] or [contentful-toc id="..."]
+     * Dedicated handler for table of contents components
+     */
+    public function render_toc_shortcode($atts)
+    {
+        $atts = shortcode_atts([
+            'id' => '',
+            'class' => '',
+            'title' => ''
+        ], $atts, 'contentful_toc');
+
+        $table_id = sanitize_text_field($atts['id']);
+        $custom_class = sanitize_text_field($atts['class']);
+        $custom_title = sanitize_text_field($atts['title']);
+
+        if (empty($table_id)) {
+            return '<div class="contentful-error">Error: No TOC ID specified. Usage: [contentful_toc id="your-toc-id"]</div>';
+        }
+
+        if (!isset($this->tables_data[$table_id])) {
+            return '<div class="contentful-error">Error: TOC "' . esc_html($table_id) . '" not found. Available: ' . implode(', ', array_keys($this->tables_data)) . '</div>';
+        }
+
+        $table_data = $this->tables_data[$table_id];
+
+        // Override title if custom title is provided
+        if (!empty($custom_title)) {
+            $table_data['title'] = $custom_title;
+        }
+
+        $html = $this->render_table_of_contents($table_data, $table_id);
+
+        // Add custom CSS class if provided
+        if (!empty($custom_class)) {
+            $html = str_replace(
+                'class="contentful-table-of-contents"',
+                'class="contentful-table-of-contents ' . esc_attr($custom_class) . '"',
+                $html
+            );
+        }
+
+        return $html;
+    }
+
     /**
      * Render table HTML
      */
@@ -489,38 +592,63 @@ With custom title:
     
     /**
      * Render table of contents
+     * Generates a dynamic TOC that scans page headings via JavaScript
      */
     private function render_table_of_contents($table_data, $table_id) {
-        $html = '<div class="contentful-table-of-contents" id="contentful-toc-' . esc_attr($table_id) . '">';
+        $header_tags = $table_data['headerTags'] ?? ['H2'];
+        $style = $table_data['style'] ?? 'List';
+        $is_sticky = !empty($table_data['isSticky']);
+
+        $sticky_class = $is_sticky ? ' toc-sticky' : '';
+        $style_class = ' toc-style-' . sanitize_html_class(strtolower($style));
+
+        $html = '<div class="contentful-table-of-contents' . $style_class . $sticky_class . '" id="contentful-toc-' . esc_attr($table_id) . '">';
         
         if (!empty($table_data['title'])) {
-            $html .= '<h3>' . esc_html($table_data['title']) . '</h3>';
+            $html .= '<h3 class="toc-title">' . esc_html($table_data['title']) . '</h3>';
         }
-        
-        // Check if this is a JavaScript-based TOC (like our Contentful data)
-        if (isset($table_data['html'])) {
-            // For headless WordPress, we'll create a static version
-            // Since we can't rely on JavaScript in headless mode
-            $html .= '<div class="toc-placeholder">';
-            $html .= '<p><em>Table of Contents will be generated based on page headers (H2 tags) when this content is rendered.</em></p>';
-            $html .= '<p>Headers detected: ' . implode(', ', $table_data['headerTags'] ?? ['H2']) . '</p>';
-            $html .= '</div>';
-        } else {
-            // Legacy format with items array
+
+        // Check if this has pre-built items
+        if (isset($table_data['items']) && is_array($table_data['items'])) {
             $html .= '<ul class="toc-list">';
-            
-            if (isset($table_data['items']) && is_array($table_data['items'])) {
-                foreach ($table_data['items'] as $item) {
-                    $text = $item['text'] ?? '';
-                    $anchor = $item['anchor'] ?? sanitize_title($text);
-                    
-                    if (!empty($text)) {
-                        $html .= '<li><a href="#' . esc_attr($anchor) . '">' . esc_html($text) . '</a></li>';
-                    }
+            foreach ($table_data['items'] as $item) {
+                $text = $item['text'] ?? '';
+                $anchor = $item['anchor'] ?? sanitize_title($text);
+                if (!empty($text)) {
+                    $html .= '<li><a href="#' . esc_attr($anchor) . '">' . esc_html($text) . '</a></li>';
                 }
             }
-            
             $html .= '</ul>';
+        } else {
+            // Dynamic TOC: scan page headings via JavaScript
+            $selector = implode(', ', array_map(function ($tag) {
+                return strtolower(trim($tag));
+            }, $header_tags));
+
+            $html .= '<nav class="toc-container" data-headers="' . esc_attr(implode(',', $header_tags)) . '">';
+            $html .= '<ul class="toc-list"></ul>';
+            $html .= '</nav>';
+
+            // Inline script to populate the TOC from page headings
+            $html .= '<script>';
+            $html .= '(function(){';
+            $html .= 'var toc=document.getElementById("contentful-toc-' . esc_js($table_id) . '");';
+            $html .= 'if(!toc)return;';
+            $html .= 'var list=toc.querySelector(".toc-list");';
+            $html .= 'var sel="' . esc_js($selector) . '";';
+            $html .= 'var post=toc.closest(".entry-content")||toc.closest("article")||document;';
+            $html .= 'var headings=post.querySelectorAll(sel);';
+            $html .= 'if(!headings.length){toc.style.display="none";return;}';
+            $html .= 'headings.forEach(function(h,i){';
+            $html .= 'var id=h.id||"toc-heading-"+i;';
+            $html .= 'if(!h.id)h.id=id;';
+            $html .= 'var li=document.createElement("li");';
+            $html .= 'var a=document.createElement("a");';
+            $html .= 'a.href="#"+id;a.textContent=h.textContent;';
+            $html .= 'li.appendChild(a);list.appendChild(li);';
+            $html .= '});';
+            $html .= '})();';
+            $html .= '</script>';
         }
         
         $html .= '</div>';
