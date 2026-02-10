@@ -1,22 +1,33 @@
 {
   "name": "contentful-inventory",
-  "version": "1.0.0",
-  "description": "Generate a visual HTML report of your Contentful space's content model",
+  "version": "2.0.0",
+  "description": "Comprehensive tool for migrating content from Contentful to WordPress with table integration support",
   "main": "index.js",
   "scripts": {
     "inventory": "tsx src/inventory.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "analyze": "node src/migration/analyze-tables.js",
+    "extract-tables": "node src/contentful/extract-tables.js",
+    "migrate": "node src/migration/migrate-content.js",
+    "install-plugin": "node src/wordpress/install-plugin.js",
+    "test-connection": "node src/utils/test-connection.js",
+    "restore-content": "node src/migration/restore-content.js",
+    "build": "tsc",
+    "dev": "tsx --watch src/inventory.ts",
+    "clean": "rm -rf out/* temp/*"
   },
   "keywords": [
     "contentful",
+    "wordpress",
+    "migration",
     "cms",
-    "content-model",
-    "inventory",
-    "documentation",
-    "report"
+    "headless",
+    "tables",
+    "content-migration",
+    "api-integration"
   ],
   "author": "sanruiz",
-  "license": "ISC",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/sanruiz/contentful-inventory.git"
@@ -24,12 +35,13 @@
   "type": "module",
   "dependencies": {
     "contentful-management": "^11.68.0",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "mysql2": "^3.16.3",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
-  
 }

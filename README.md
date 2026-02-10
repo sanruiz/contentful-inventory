@@ -1,128 +1,155 @@
-# Contentful Inventory
+# Contentful to WordPress Migration Tool
 
-📊 Generate a beautiful HTML report of your Contentful space's content model, including content types, fields, references, and enumerations.
+A comprehensive tool for migrating content from Contentful to WordPress, with specialized support for embedded tables, components, and headless WordPress setups.
 
-![Contentful Inventory Report](https://img.shields.io/badge/Contentful-Content%20Model%20Inventory-blue?style=for-the-badge&logo=contentful)
+## 🚀 Features
 
-## ✨ Features
+- **Content Migration**: Migrate posts, pages, and custom content from Contentful to WordPress
+- **Table Integration**: Extract and render Contentful tables as WordPress shortcodes
+- **Headless WordPress Support**: Built for headless WordPress installations
+- **Plugin System**: Complete WordPress plugin for table rendering
+- **Multiple Storage Options**: Support for file-based, database, and meta field storage
+- **Automated Processing**: Batch processing and automated content updates
 
-- **Visual HTML Report** - Clean, modern UI to explore your content model
-- **Content Types Overview** - See all content types with entry counts and field counts
-- **Field Details** - Complete field information including types, validations, and attributes
-- **Reference Mapping** - Understand relationships between content types
-- **Enumeration Values** - View all allowed values for dropdown/select fields
-- **Expandable Sections** - Interactive accordion-style content type details
-- **No Server Required** - Static HTML file that works anywhere
+## 📁 Project Structure
 
-## 📋 Prerequisites
-
-- Node.js 18+ 
-- A Contentful space with a Management API token
-
-## 🚀 Installation
-
-1. Clone this repository:
-```bash
-git clone https://github.com/sanruiz/contentful-inventory.git
-cd contentful-inventory
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Create a `.env` file in the root directory:
-```env
-CONTENTFUL_MANAGEMENT_TOKEN=your_management_token_here
-CONTENTFUL_SPACE_ID=your_space_id_here
-CONTENTFUL_ENVIRONMENT_ID=master  # Optional, defaults to 'master'
-```
-
-## 🔑 Getting Your Contentful Credentials
-
-### Management Token
-1. Go to your Contentful space
-2. Navigate to **Settings** → **CMA tokens**
-3. Click **Generate personal token**
-4. Copy the token to your `.env` file
-
-### Space ID
-1. Go to your Contentful space
-2. Navigate to **Settings** → **General settings**
-3. Copy the **Space ID**
-
-## 📖 Usage
-
-Generate the inventory report:
-
-```bash
-npm run inventory
-```
-
-This will create an `out/inventory.html` file with your complete content model documentation.
-
-Open the file in any browser to explore your content types:
-
-```bash
-open out/inventory.html  # macOS
-# or
-xdg-open out/inventory.html  # Linux
-# or
-start out/inventory.html  # Windows
-```
-
-## 📊 Report Contents
-
-The generated report includes:
-
-| Section | Description |
-|---------|-------------|
-| **Summary Stats** | Total content types, entries, and assets |
-| **Content Types** | List of all content types with entry/field counts |
-| **Fields Table** | Field name, ID, type, and attributes (required, localized) |
-| **References** | Link fields showing allowed content types |
-| **Enumerations** | Fields with predefined allowed values |
-
-## 🛠️ Development
-
-### Type Checking
-```bash
-npm run typecheck
-```
-
-### Project Structure
 ```
 contentful-inventory/
 ├── src/
-│   └── inventory.ts    # Main script
-├── out/
-│   └── inventory.html  # Generated report
-├── .env                # Your credentials (not committed)
-├── package.json
-├── tsconfig.json
-└── README.md
+│   ├── contentful/          # Contentful API integrations
+│   ├── wordpress/           # WordPress API integrations  
+│   ├── migration/           # Migration scripts and tools
+│   └── utils/               # Shared utilities and helpers
+├── wordpress-plugin/        # WordPress plugin for table rendering
+├── docs/                    # Documentation and guides
+├── examples/               # Example configurations and usage
+├── out/                    # Generated exports and outputs
+└── temp/                   # Temporary files (development only)
 ```
+
+## 🛠️ Setup
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- WordPress installation with REST API enabled
+- Contentful space with Management API access
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/sanruiz/contentful-inventory.git
+   cd contentful-inventory
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` with your credentials:
+   ```env
+   # Contentful Configuration
+   CONTENTFUL_MANAGEMENT_TOKEN=your_token
+   CONTENTFUL_SPACE_ID=your_space_id
+   CONTENTFUL_ENVIRONMENT_ID=master
+
+   # WordPress Configuration
+   WP_BASE_URL=https://your-site.local
+   WP_USERNAME=your_username
+   WP_APPLICATION_PASSWORD=your_app_password
+   ```
+
+## 📖 Usage
+
+### Quick Start
+
+1. **Analyze Contentful content**
+   ```bash
+   npm run analyze
+   ```
+
+2. **Extract tables from Contentful**
+   ```bash
+   npm run extract-tables
+   ```
+
+3. **Install WordPress plugin**
+   ```bash
+   npm run install-plugin
+   ```
+
+4. **Migrate content**
+   ```bash
+   npm run migrate
+   ```
+
+### Available Scripts
+
+- `npm run analyze` - Analyze Contentful content and identify tables
+- `npm run extract-tables` - Extract table components from Contentful
+- `npm run migrate` - Run full migration process
+- `npm run install-plugin` - Install WordPress plugin
+- `npm run test-connection` - Test WordPress API connection
+
+## 🔧 Configuration
+
+### WordPress Plugin Setup
+
+The included WordPress plugin provides shortcode functionality for rendering Contentful tables:
+
+1. Copy plugin to WordPress:
+   ```bash
+   cp -r wordpress-plugin/* /path/to/wp-content/plugins/contentful-tables/
+   ```
+
+2. Activate plugin in WordPress admin
+
+3. Configure table sources in Settings → Contentful Tables
+
+### Migration Options
+
+The tool supports multiple migration strategies:
+
+- **File-based storage**: Tables stored as JSON files in `wp-content/`
+- **Database storage**: Tables stored in custom WordPress database table
+- **Meta field storage**: Tables stored as post meta fields
+
+## 📚 Documentation
+
+- [Installation Guide](docs/installation.md)
+- [Plugin Documentation](docs/plugin.md)
+- [Migration Guide](docs/migration.md)
+- [API Reference](docs/api.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
+## 🎯 Examples
+
+See the `examples/` directory for:
+- Sample configurations
+- Custom migration scripts
+- Integration examples
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to:
-
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## 📝 License
+## 📄 License
 
-ISC License - feel free to use this in your own projects!
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🆘 Support
 
-- Built with [Contentful Management API](https://www.contentful.com/developers/docs/references/content-management-api/)
-- Uses [tsx](https://github.com/esbuild-kit/tsx) for TypeScript execution
-
----
-
-Made with ❤️ for the Contentful community
+- Create an [issue](https://github.com/sanruiz/contentful-inventory/issues) for bug reports
+- Check [documentation](docs/) for detailed guides
+- Review [examples](examples/) for usage patterns

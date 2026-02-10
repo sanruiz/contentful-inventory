@@ -1,4 +1,71 @@
+# Dependencies
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Output directories
 out/
+dist/
+build/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+
+# WordPress specific
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+
+# Backup files
+*.bak
+*.backup
+*.sql
+
+# Development files (keep in temp/)
+temp/*
+!temp/.gitkeep
+
+# Compiled output
+lib/
+es/
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Lock files (keep package-lock.json but not others)
+yarn.lock
+pnpm-lock.yaml
