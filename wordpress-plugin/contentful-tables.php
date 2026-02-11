@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Contentful Tables
  * Plugin URI: https://github.com/sanruiz/contentful-inventory
- * Description: Displays Contentful tables using shortcodes for headless WordPress setups
- * Version: 2.0.0
+ * Description: Displays Contentful content components (tables, charts, cards, forms) using shortcodes
+ * Version: 3.0.0
  * Author: Santiago Ramirez
  * License: GPL v2 or later
  * Text Domain: contentful-tables
@@ -17,16 +17,24 @@ if (!defined('ABSPATH')) {
 class ContentfulTablesPlugin {
     
     private $tables_data = [];
-    private $plugin_version = '2.0.0';
+    private $charts_data = [];
+    private $cards_data = [];
+    private $plugin_version = '3.0.0';
     
     public function __construct() {
         add_action('init', [$this, 'init']);
 
         // Register shortcodes with both underscore and hyphen variants
         add_shortcode('contentful_table', [$this, 'render_table_shortcode']);
-        add_shortcode('contentful-table', [$this, 'render_table_shortcode']); // backward compat
+        add_shortcode('contentful-table', [$this, 'render_table_shortcode']);
         add_shortcode('contentful_toc', [$this, 'render_toc_shortcode']);
-        add_shortcode('contentful-toc', [$this, 'render_toc_shortcode']); // backward compat
+        add_shortcode('contentful-toc', [$this, 'render_toc_shortcode']);
+        add_shortcode('contentful_chart', [$this, 'render_chart_shortcode']);
+        add_shortcode('contentful-chart', [$this, 'render_chart_shortcode']);
+        add_shortcode('contentful_cards', [$this, 'render_cards_shortcode']);
+        add_shortcode('contentful-cards', [$this, 'render_cards_shortcode']);
+        add_shortcode('contentful_form', [$this, 'render_form_shortcode']);
+        add_shortcode('contentful-form', [$this, 'render_form_shortcode']);
 
         add_action('wp_enqueue_scripts', [$this, 'enqueue_styles']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
@@ -38,6 +46,8 @@ class ContentfulTablesPlugin {
     
     public function init() {
         $this->load_tables_data();
+        $this->load_charts_data();
+        $this->load_cards_data();
     }
     
     /**
@@ -346,6 +356,162 @@ class ContentfulTablesPlugin {
             text-decoration: underline;
             color: #005a87;
         }
+
+        /* Chart styles */
+        .contentful-chart {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .contentful-chart .chart-title {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .contentful-chart-table {
+            margin-top: 10px;
+        }
+
+        .chart-placeholder {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        /* Cards styles */
+        .contentful-cards {
+            margin: 20px 0;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .contentful-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .card-field {
+            margin-bottom: 8px;
+        }
+
+        .card-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        /* Form styles */
+        .contentful-form-container {
+            margin: 20px 0;
+            padding: 25px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .contentful-form .form-field {
+            margin-bottom: 15px;
+        }
+
+        .contentful-form label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .contentful-form input,
+        .contentful-form textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .contentful-form .wp-button {
+            display: inline-block;
+            padding: 10px 25px;
+            background: #0073aa;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .contentful-form .wp-button:hover {
+            background: #005a87;
+        }
+
+        /* CTA button styles */
+        .cta-button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 12px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .cta-dark-green { background: #2d6a4f; color: white; }
+        .cta-light-green { background: #52b788; color: white; }
+        .cta-dark-green:hover { background: #1b4332; }
+        .cta-light-green:hover { background: #40916c; }
+
+        /* Back to top link */
+        .back-to-top {
+            text-align: right;
+            margin: 10px 0;
+        }
+
+        .back-to-top a {
+            color: #0073aa;
+            text-decoration: none;
+        }
+
+        /* Link reference list */
+        .link-reference-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .link-reference-list li {
+            padding: 5px 0;
+        }
+
+        .link-reference-list a {
+            color: #0073aa;
+            text-decoration: none;
+        }
+
+        .link-reference-list a:hover {
+            text-decoration: underline;
+        }
+
+        /* Rich text block */
+        .rich-text-block {
+            margin: 15px 0;
+            padding: 15px;
+            background: #fafafa;
+            border-left: 3px solid #0073aa;
+        }
         ';
         
         wp_add_inline_style('contentful-tables', $css);
@@ -478,7 +644,218 @@ Legacy format (also supported):
         </div>
         <?php
     }
-    
+
+    /**
+     * Load chart data from JSON files in wp-content/contentful-charts/
+     */
+    private function load_charts_data()
+    {
+        $charts_dir = WP_CONTENT_DIR . '/contentful-charts/';
+        if (is_dir($charts_dir)) {
+            $json_files = glob($charts_dir . '*.json');
+            if (!empty($json_files)) {
+                foreach ($json_files as $file) {
+                    $chart_id = basename($file, '.json');
+                    $chart_data = json_decode(file_get_contents($file), true);
+                    if ($chart_data) {
+                        $this->charts_data[$chart_id] = $chart_data;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Load card data from JSON files in wp-content/contentful-cards/
+     */
+    private function load_cards_data()
+    {
+        $cards_dir = WP_CONTENT_DIR . '/contentful-cards/';
+        if (is_dir($cards_dir)) {
+            $json_files = glob($cards_dir . '*.json');
+            if (!empty($json_files)) {
+                foreach ($json_files as $file) {
+                    $card_id = basename($file, '.json');
+                    $card_data = json_decode(file_get_contents($file), true);
+                    if ($card_data) {
+                        $this->cards_data[$card_id] = $card_data;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Render chart shortcode [contentful_chart id="..." type="..." title="..."]
+     */
+    public function render_chart_shortcode($atts)
+    {
+        $atts = shortcode_atts([
+            'id' => '',
+            'type' => '',
+            'title' => '',
+            'class' => '',
+        ], $atts, 'contentful_chart');
+
+        $chart_id = sanitize_text_field($atts['id']);
+        $custom_title = sanitize_text_field($atts['title']);
+        $custom_class = sanitize_text_field($atts['class']);
+
+        if (empty($chart_id)) {
+            return '<!-- Chart: No ID specified -->';
+        }
+
+        $chart_data = $this->charts_data[$chart_id] ?? null;
+        $title = $custom_title ?: ($chart_data['title'] ?? '');
+        $viz_type = $chart_data['visualizationType'] ?? $atts['type'];
+
+        // If we have source data with a table, render as an HTML table with chart styling
+        $html = '<div class="contentful-chart' . ($custom_class ? ' ' . esc_attr($custom_class) : '') . '" id="contentful-chart-' . esc_attr($chart_id) . '">';
+
+        if (!empty($title)) {
+            $html .= '<h3 class="chart-title">' . esc_html($title) . '</h3>';
+        }
+
+        if ($chart_data && isset($chart_data['source'])) {
+            $source = $chart_data['source'];
+            $label_prefix = $chart_data['labelPrefix'] ?? '';
+
+            if ($source['type'] === 'table' && isset($source['dataTable']['tableData'])) {
+                $table_rows = $source['dataTable']['tableData'];
+                if (count($table_rows) > 0) {
+                    $headers = array_shift($table_rows);
+
+                    $html .= '<div class="table-responsive">';
+                    $html .= '<table class="contentful-table contentful-chart-table">';
+                    $html .= '<thead><tr>';
+                    foreach ($headers as $h) {
+                        $html .= '<th>' . esc_html($h) . '</th>';
+                    }
+                    $html .= '</tr></thead><tbody>';
+
+                    foreach ($table_rows as $row) {
+                        $html .= '<tr>';
+                        foreach ($row as $i => $cell) {
+                            // Add prefix to numeric values (skip first column — usually label)
+                            $display = $cell;
+                            if ($i > 0 && is_numeric($cell) && $label_prefix) {
+                                $display = $label_prefix . number_format((float) $cell);
+                            }
+                            $html .= '<td>' . esc_html($display) . '</td>';
+                        }
+                        $html .= '</tr>';
+                    }
+
+                    $html .= '</tbody></table></div>';
+                }
+            } elseif ($source['type'] === 'spreadsheet' && !empty($source['url'])) {
+                $html .= '<p class="chart-source">Data source: <a href="' . esc_url($source['url']) . '" target="_blank">Download spreadsheet</a></p>';
+            }
+        } else {
+            $html .= '<p class="chart-placeholder">[' . esc_html($viz_type) . ']</p>';
+        }
+
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    /**
+     * Render cards shortcode [contentful_cards id="..." type="..." title="..."]
+     */
+    public function render_cards_shortcode($atts)
+    {
+        $atts = shortcode_atts([
+            'id' => '',
+            'type' => '',
+            'title' => '',
+            'class' => '',
+        ], $atts, 'contentful_cards');
+
+        $card_id = sanitize_text_field($atts['id']);
+        $custom_title = sanitize_text_field($atts['title']);
+        $custom_class = sanitize_text_field($atts['class']);
+
+        if (empty($card_id)) {
+            return '<!-- Cards: No ID specified -->';
+        }
+
+        $card_data = $this->cards_data[$card_id] ?? null;
+        $title = $custom_title ?: ($card_data['title'] ?? '');
+
+        $html = '<div class="contentful-cards' . ($custom_class ? ' ' . esc_attr($custom_class) : '') . '" id="contentful-cards-' . esc_attr($card_id) . '">';
+
+        if (!empty($title)) {
+            $html .= '<h3 class="cards-title">' . esc_html($title) . '</h3>';
+        }
+
+        if ($card_data && isset($card_data['source'])) {
+            $source = $card_data['source'];
+
+            if ($source['type'] === 'table' && isset($source['dataTable']['tableData'])) {
+                $table_rows = $source['dataTable']['tableData'];
+                if (count($table_rows) > 0) {
+                    $headers = array_shift($table_rows);
+
+                    $html .= '<div class="cards-grid">';
+                    foreach ($table_rows as $row) {
+                        $html .= '<div class="contentful-card">';
+                        foreach ($row as $i => $cell) {
+                            $header = $headers[$i] ?? '';
+                            if (!empty($cell)) {
+                                $html .= '<div class="card-field">';
+                                if ($header)
+                                    $html .= '<span class="card-label">' . esc_html($header) . ':</span> ';
+                                $html .= '<span class="card-value">' . wp_kses_post($cell) . '</span>';
+                                $html .= '</div>';
+                            }
+                        }
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
+                }
+            } elseif ($source['type'] === 'spreadsheet' && !empty($source['url'])) {
+                $html .= '<p class="cards-source">Data source: <a href="' . esc_url($source['url']) . '" target="_blank">Download data</a></p>';
+            }
+        } else {
+            $html .= '<p class="cards-placeholder">[Provider listings]</p>';
+        }
+
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    /**
+     * Render form shortcode [contentful_form id="..." title="..." submit="..."]
+     */
+    public function render_form_shortcode($atts)
+    {
+        $atts = shortcode_atts([
+            'id' => '',
+            'title' => 'Contact Us',
+            'submit' => 'Send',
+            'class' => '',
+        ], $atts, 'contentful_form');
+
+        $form_id = sanitize_text_field($atts['id']);
+        $title = sanitize_text_field($atts['title']);
+        $submit_text = sanitize_text_field($atts['submit']);
+        $custom_class = sanitize_text_field($atts['class']);
+
+        $html = '<div class="contentful-form-container' . ($custom_class ? ' ' . esc_attr($custom_class) : '') . '" id="contentful-form-' . esc_attr($form_id) . '">';
+        $html .= '<h3>' . esc_html($title) . '</h3>';
+        $html .= '<form class="contentful-form" method="post">';
+        $html .= '<div class="form-field"><label for="name">Name</label><input type="text" id="name" name="name" required /></div>';
+        $html .= '<div class="form-field"><label for="email">Email</label><input type="email" id="email" name="email" required /></div>';
+        $html .= '<div class="form-field"><label for="message">Message</label><textarea id="message" name="message" rows="5" required></textarea></div>';
+        $html .= '<div class="form-submit"><button type="submit" class="wp-button">' . esc_html($submit_text) . '</button></div>';
+        $html .= '</form>';
+        $html .= '</div>';
+
+        return $html;
+    }
+
     /**
      * Render table shortcode [contentful_table id="..."] or [contentful-table id="..."]
      */
@@ -486,12 +863,14 @@ Legacy format (also supported):
         $atts = shortcode_atts([
             'id' => '',
             'class' => '',
-            'title' => ''
+            'title' => '',
+            'key' => '',
         ], $atts, 'contentful_table');
         
         $table_id = sanitize_text_field($atts['id']);
         $custom_class = sanitize_text_field($atts['class']);
         $custom_title = sanitize_text_field($atts['title']);
+        $key_filter = sanitize_text_field($atts['key']);
         
         if (empty($table_id)) {
             return '<div class="contentful-error">Error: No table ID specified. Usage: [contentful_table id="your-table-id"]</div>';
@@ -513,7 +892,7 @@ Legacy format (also supported):
         if ($type === 'tableOfContents') {
             $html = $this->render_table_of_contents($table_data, $table_id);
         } else {
-            $html = $this->render_data_table($table_data, $table_id);
+            $html = $this->render_data_table($table_data, $table_id, $key_filter);
         }
         
         // Add custom CSS class if provided
@@ -657,12 +1036,105 @@ Legacy format (also supported):
     }
     
     /**
-     * Render data table
+     * Filter table rows by matching a key value against a heading slug.
+     * 
+     * The heading slug comes from the rich text converter (e.g., "area-agency-on-aging").
+     * The key values are single words from the CSV key column (e.g., "agency", "food").
+     * 
+     * Matching strategy:
+     * 1. Exact match: heading slug === key value
+     * 2. Contains match: heading slug contains the key value as a word
+     * 3. Starts-with match: heading slug starts with the key value
+     * 
+     * @param array $rows Data rows (without header)
+     * @param int $keyColIndex Index of the key column
+     * @param string $headingSlug The heading slug from the shortcode key attribute
+     * @param array $keyValues Known key values from table metadata
+     * @return array Filtered rows
      */
-    private function render_data_table($table_data, $table_id) {
+    private function filter_rows_by_key($rows, $keyColIndex, $headingSlug, $keyValues = []) {
+        if (empty($headingSlug) || $keyColIndex < 0) return $rows;
+
+        // First, resolve which actual key value this heading maps to
+        $matchedKey = $this->resolve_key_from_heading($headingSlug, $keyValues);
+        
+        if (empty($matchedKey)) return $rows;
+
+        // Filter rows where key column matches
+        return array_values(array_filter($rows, function($row) use ($keyColIndex, $matchedKey) {
+            $rowKey = strtolower(trim($row[$keyColIndex] ?? ''));
+            return $rowKey === $matchedKey;
+        }));
+    }
+
+    /**
+     * Resolve which key value matches a heading slug.
+     * 
+     * Examples:
+     *   heading "area-agency-on-aging", keys ["agency","food",...] → "agency"
+     *   heading "food-assistance-programs", keys ["agency","food",...] → "food"
+     *   heading "home-and-vehicle-repair", keys ["agency","repair",...] → "repair"
+     * 
+     * @param string $headingSlug Heading text as a slug
+     * @param array $keyValues Known key values
+     * @return string|null Matched key value or null
+     */
+    private function resolve_key_from_heading($headingSlug, $keyValues = []) {
+        $headingSlug = strtolower($headingSlug);
+        $headingWords = preg_split('/[\s\-]+/', $headingSlug);
+        
+        // If no known key values, try to use the heading slug directly
+        if (empty($keyValues)) {
+            return $headingSlug;
+        }
+
+        // Exact match first
+        foreach ($keyValues as $key) {
+            $key = strtolower(trim($key));
+            if ($headingSlug === $key) {
+                return $key;
+            }
+        }
+
+        // Check if any key value appears as a word in the heading
+        foreach ($keyValues as $key) {
+            $key = strtolower(trim($key));
+            if (in_array($key, $headingWords)) {
+                return $key;
+            }
+        }
+
+        // Starts-with match
+        foreach ($keyValues as $key) {
+            $key = strtolower(trim($key));
+            if (strpos($headingSlug, $key) === 0) {
+                return $key;
+            }
+        }
+
+        // Contains match (last resort)
+        foreach ($keyValues as $key) {
+            $key = strtolower(trim($key));
+            if (strpos($headingSlug, $key) !== false) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Render data table
+     * @param array $table_data Table data from JSON
+     * @param string $table_id Contentful entry ID
+     * @param string $key_filter Optional key value for row filtering (heading slug from shortcode)
+     */
+    private function render_data_table($table_data, $table_id, $key_filter = '') {
         $html = '<div class="contentful-data-table" id="contentful-table-' . esc_attr($table_id) . '">';
         
-        if (!empty($table_data['title'])) {
+        if (!empty($table_data['title']) && empty($key_filter)) {
+            // Only show the table title if there's no key filter
+            // (when key-filtered, the section heading above already provides context)
             $html .= '<h3>' . esc_html($table_data['title']) . '</h3>';
         }
         
@@ -673,13 +1145,37 @@ Legacy format (also supported):
             // First row is headers
             $headers = array_shift($rawData);
             
-            // Remove the 'key' column if it exists (last column)
-            if (end($headers) === 'key') {
-                array_pop($headers);
-                // Also remove key column from data rows
-                $rawData = array_map(function($row) {
-                    if (is_array($row) && count($row) > 0) {
-                        array_pop($row);
+            // Determine the key column index
+            $keyColIndex = -1;
+            $keyColName = $table_data['keyColumn'] ?? null;
+            
+            if (!empty($key_filter) && $keyColName) {
+                // Use stored keyColumnIndex
+                $keyColIndex = $table_data['keyColumnIndex'] ?? -1;
+                
+                // Fallback: find by column name
+                if ($keyColIndex < 0) {
+                    $keyColIndex = array_search($keyColName, $headers);
+                    if ($keyColIndex === false) $keyColIndex = -1;
+                }
+            }
+            
+            // Legacy fallback: check if last column is named 'key'
+            if ($keyColIndex < 0 && !empty($key_filter) && end($headers) === 'key') {
+                $keyColIndex = count($headers) - 1;
+            }
+            
+            // Apply key-based row filtering if key is provided
+            if (!empty($key_filter) && $keyColIndex >= 0) {
+                $rawData = $this->filter_rows_by_key($rawData, $keyColIndex, $key_filter, $table_data['keyValues'] ?? []);
+            }
+            
+            // Remove the key column from display (headers and rows)
+            if ($keyColIndex >= 0) {
+                array_splice($headers, $keyColIndex, 1);
+                $rawData = array_map(function($row) use ($keyColIndex) {
+                    if (is_array($row) && count($row) > $keyColIndex) {
+                        array_splice($row, $keyColIndex, 1);
                     }
                     return $row;
                 }, $rawData);

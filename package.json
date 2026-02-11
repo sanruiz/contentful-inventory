@@ -15,6 +15,10 @@
     "import-guides": "node src/migration/import-guides.js",
     "extract-guide-tables": "node src/migration/extract-guide-tables.js",
     "analyze-guides": "node src/contentful/analyze-guides.js",
+    "analyze-communities": "node src/contentful/analyze-community-pages.js",
+    "import-states": "node src/migration/import-states.js",
+    "import-cities": "node src/migration/import-cities.js",
+    "extract-charts": "node src/migration/extract-charts.js",
     "build": "tsc",
     "dev": "tsx --watch src/inventory.ts",
     "clean": "rm -rf out/* temp/*"
