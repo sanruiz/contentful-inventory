@@ -169,3 +169,95 @@ function community_listings_deactivate() {
     flush_rewrite_rules();
 }
 register_deactivation_hook(__FILE__, 'community_listings_deactivate');
+
+/**
+ * WPGraphQL: Apply do_shortcode() to Community content fields.
+ *
+ * Filters graphql_resolve_field so that shortcodes embedded in community
+ * post content (e.g., [contentful_table], [contentful_cards]) are rendered
+ * as HTML in GraphQL responses instead of raw shortcode text.
+ *
+ * @param mixed  $result         The resolved field value.
+ * @param mixed  $source         The source object.
+ * @param array  $args           The field arguments.
+ * @param mixed  $context        The AppContext.
+ * @param mixed  $info           The ResolveInfo.
+ * @param string $type_name      The GraphQL type name.
+ * @param string $field_key      The field key.
+ * @param mixed  $field_def      The field definition.
+ * @param mixed  $field_resolver The field resolver.
+ * @return mixed The result with shortcodes rendered as HTML.
+ */
+function community_listings_graphql_resolve_shortcodes($result, $source, $args, $context, $info, $type_name, $field_key, $field_def, $field_resolver)
+{
+    // Only process string results.
+    if (!is_string($result) || empty($result)) {
+        return $result;
+    }
+
+    // Only process content/excerpt fields on Community type.
+    $target_fields = ['content', 'excerpt'];
+    if (!in_array($field_key, $target_fields, true)) {
+        return $result;
+    }
+
+    if ($type_name !== 'Community') {
+        return $result;
+    }
+
+    // Quick check: skip if no shortcode brackets present.
+    if (strpos($result, '[') === false) {
+        return $result;
+    }
+
+    return do_shortcode($result);
+}
+add_filter('graphql_resolve_field', 'community_listings_graphql_resolve_shortcodes', 10, 9);
+
+/**
+ * WPGraphQL: Register renderedContent field on Community type.
+ *
+ * Provides an explicit GraphQL field that returns community content with all
+ * shortcodes processed via do_shortcode().
+ *
+ * Usage:
+ *   {
+ *     communities {
+ *       nodes {
+ *         title
+ *         renderedContent
+ *       }
+ *     }
+ *   }
+ */
+function community_listings_graphql_register_rendered_content()
+{
+    if (!function_exists('register_graphql_field')) {
+        return;
+    }
+
+    register_graphql_field('Community', 'renderedContent', [
+        'type' => 'String',
+        'description' => 'Community content with all shortcodes rendered as HTML.',
+        'resolve' => function ($post) {
+            $content = '';
+
+            if (isset($post->contentRaw)) {
+                $content = $post->contentRaw;
+            } elseif (isset($post->ID)) {
+                $post_object = get_post($post->ID);
+                $content = $post_object ? $post_object->post_content : '';
+            }
+
+            if (empty($content)) {
+                return '';
+            }
+
+            $content = do_shortcode($content);
+            $content = wpautop($content);
+
+            return $content;
+        },
+    ]);
+}
+add_action('graphql_register_types', 'community_listings_graphql_register_rendered_content');

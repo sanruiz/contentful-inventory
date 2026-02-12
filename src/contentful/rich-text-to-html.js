@@ -347,10 +347,10 @@ function renderEmbeddedEntryBlock(node, context, siblings = null, index = -1) {
 
     case 'dataVisualizationTables': {
       // Check if this table has key-based filtering
-      // The key value is derived from the nearest preceding heading
-      const keyAttr = detectTableKey(entry, siblings, index);
-      if (keyAttr) {
-        return `[contentful_table id="${entryId}" key="${escapeAttr(keyAttr)}"]`;
+      // The filter value is derived from the nearest preceding heading
+      const filterAttr = detectTableKey(entry, siblings, index);
+      if (filterAttr) {
+        return `[contentful_table id="${entryId}" filters="${escapeAttr(filterAttr)}"]`;
       }
       return `[contentful_table id="${entryId}"]`;
     }

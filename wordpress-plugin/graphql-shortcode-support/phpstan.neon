@@ -1,0 +1,14 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - includes
+    bootstrapFiles:
+        - graphql-shortcode-support.php
+    scanDirectories:
+        - vendor
+    excludePaths:
+        - tests/*
+        - build/*

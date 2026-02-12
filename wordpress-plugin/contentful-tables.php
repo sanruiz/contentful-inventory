@@ -3,7 +3,7 @@
  * Plugin Name: Contentful Tables
  * Plugin URI: https://github.com/sanruiz/contentful-inventory
  * Description: Displays Contentful content components (tables, charts, cards, forms) using shortcodes
- * Version: 3.0.0
+ * Version: 3.2.0
  * Author: Santiago Ramirez
  * License: GPL v2 or later
  * Text Domain: contentful-tables
@@ -19,7 +19,7 @@ class ContentfulTablesPlugin {
     private $tables_data = [];
     private $charts_data = [];
     private $cards_data = [];
-    private $plugin_version = '3.0.0';
+    private $plugin_version = '3.2.0';
     
     public function __construct() {
         add_action('init', [$this, 'init']);
@@ -36,9 +36,29 @@ class ContentfulTablesPlugin {
         add_shortcode('contentful_form', [$this, 'render_form_shortcode']);
         add_shortcode('contentful-form', [$this, 'render_form_shortcode']);
 
+        // Prevent wptexturize from mangling shortcode attributes (smart quotes break IDs)
+        add_filter('no_texturize_shortcodes', function ($shortcodes) {
+            return array_merge($shortcodes, [
+                'contentful_table',
+                'contentful-table',
+                'contentful_toc',
+                'contentful-toc',
+                'contentful_chart',
+                'contentful-chart',
+                'contentful_cards',
+                'contentful-cards',
+                'contentful_form',
+                'contentful-form',
+            ]);
+        });
+
         add_action('wp_enqueue_scripts', [$this, 'enqueue_styles']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
-        
+
+        // WPGraphQL: apply do_shortcode() to content fields
+        add_filter('graphql_resolve_field', [$this, 'graphql_resolve_shortcodes'], 10, 9);
+        add_action('graphql_register_types', [$this, 'graphql_register_rendered_content']);
+
         // Plugin activation/deactivation hooks
         register_activation_hook(__FILE__, [$this, 'activate']);
         register_deactivation_hook(__FILE__, [$this, 'deactivate']);
@@ -139,12 +159,13 @@ class ContentfulTablesPlugin {
     }
     
     /**
-     * Load table data from JSON files in wp-content/contentful-tables/
+     * Load table data from JSON or CSV files in wp-content/contentful-tables/
      */
     private function load_tables_from_files() {
         $tables_dir = WP_CONTENT_DIR . '/contentful-tables/';
         
         if (is_dir($tables_dir)) {
+            // Load JSON files
             $json_files = glob($tables_dir . '*.json');
             
             if (!empty($json_files)) {
@@ -156,15 +177,134 @@ class ContentfulTablesPlugin {
                         $this->tables_data[$table_id] = $table_data;
                     }
                 }
-                
-                if (!empty($this->tables_data)) {
-                    update_option('contentful_tables_source', 'files');
-                    update_option('contentful_tables_post_id', 'JSON Files');
+            }
+
+            // Load CSV files (parsed into rawData format)
+            $csv_files = glob($tables_dir . '*.csv');
+
+            if (!empty($csv_files)) {
+                foreach ($csv_files as $file) {
+                    $table_id = basename($file, '.csv');
+                    // Skip if already loaded from JSON
+                    if (isset($this->tables_data[$table_id])) {
+                        continue;
+                    }
+
+                    $csv_content = file_get_contents($file);
+                    if ($csv_content !== false) {
+                        $rawData = $this->parse_csv($csv_content);
+                        if (!empty($rawData)) {
+                            // Auto-detect key column (column named "key")
+                            $headers = $rawData[0];
+                            $keyColIndex = array_search('key', array_map('strtolower', $headers));
+                            $keyColumn = ($keyColIndex !== false) ? $headers[$keyColIndex] : null;
+                            $keyValues = [];
+
+                            if ($keyColIndex !== false) {
+                                $dataRows = array_slice($rawData, 1);
+                                $keyValues = array_values(array_unique(
+                                    array_filter(array_map(function ($row) use ($keyColIndex) {
+                                        return trim($row[$keyColIndex] ?? '');
+                                    }, $dataRows))
+                                ));
+                            }
+
+                            $this->tables_data[$table_id] = [
+                                'type' => 'Plain',
+                                'title' => '',
+                                'style' => 'Equal Width',
+                                'theme' => 'Standard',
+                                'fullWidth' => true,
+                                'rawData' => $rawData,
+                                'keyColumn' => $keyColumn,
+                                'keyColumnIndex' => ($keyColIndex !== false) ? (int) $keyColIndex : -1,
+                                'keyValues' => $keyValues,
+                            ];
+                        }
+                    }
                 }
+            }
+
+            if (!empty($this->tables_data)) {
+                update_option('contentful_tables_source', 'files');
+                update_option('contentful_tables_post_id', 'JSON/CSV Files');
             }
         }
     }
-    
+
+    /**
+     * Parse CSV text into array of arrays.
+     * Handles quoted fields, commas within quotes, and multiline values.
+     * 
+     * @param string $text Raw CSV text
+     * @return array Array of rows, each row is an array of cell values
+     */
+    private function parse_csv($text)
+    {
+        // Strip UTF-8 BOM if present
+        if (substr($text, 0, 3) === "\xEF\xBB\xBF") {
+            $text = substr($text, 3);
+        }
+
+        $rows = [];
+        $current = '';
+        $in_quotes = false;
+        $row = [];
+        $len = strlen($text);
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $text[$i];
+            $next = ($i + 1 < $len) ? $text[$i + 1] : '';
+
+            if ($in_quotes) {
+                if ($ch === '"' && $next === '"') {
+                    $current .= '"';
+                    $i++; // skip escaped quote
+                } elseif ($ch === '"') {
+                    $in_quotes = false;
+                } else {
+                    $current .= $ch;
+                }
+            } else {
+                if ($ch === '"') {
+                    $in_quotes = true;
+                } elseif ($ch === ',') {
+                    $row[] = trim($current);
+                    $current = '';
+                } elseif ($ch === "\n" || ($ch === "\r" && $next === "\n")) {
+                    $row[] = trim($current);
+                    if (
+                        array_filter($row, function ($cell) {
+                            return $cell !== '';
+                        })
+                    ) {
+                        $rows[] = $row;
+                    }
+                    $row = [];
+                    $current = '';
+                    if ($ch === "\r")
+                        $i++; // skip \n after \r
+                } else {
+                    $current .= $ch;
+                }
+            }
+        }
+
+        // Last row
+        if ($current !== '' || !empty($row)) {
+            $row[] = trim($current);
+            if (
+                array_filter($row, function ($cell) {
+                    return $cell !== '';
+                })
+            ) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
     /**
      * Load table data from custom database table
      */
@@ -579,6 +719,12 @@ class ContentfulTablesPlugin {
                             <?php else: ?>
                                 <code>[contentful_table id="<?php echo esc_attr($table_id); ?>"]</code>
                             <?php endif; ?>
+                            <?php if (!empty($table_data['keyValues'])): ?>
+                                <br><strong>Filter values:</strong>
+                                <?php echo esc_html(implode(', ', $table_data['keyValues'])); ?>
+                                <br><em>Usage:</em>
+                                <code>[contentful_table id="<?php echo esc_attr($table_id); ?>" filters="<?php echo esc_attr($table_data['keyValues'][0]); ?>"]</code>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -597,6 +743,18 @@ With custom CSS class:
 
 With custom title:
 [contentful_table id="408uTkJfTRYN5S7SCmIC5t" title="Custom Table Title"]
+
+Filter by key column (single value):
+[contentful_table id="6OGCWSrHDT4MJviE31iLsa" filters="food"]
+
+Filter by key column (multiple values):
+[contentful_table id="6OGCWSrHDT4MJviE31iLsa" filters="food,agency"]
+
+Filter by heading slug (auto-resolved to key):
+[contentful_table id="6OGCWSrHDT4MJviE31iLsa" filters="area-agency-on-aging"]
+
+Legacy key attribute (also supported):
+[contentful_table id="6OGCWSrHDT4MJviE31iLsa" key="food"]
 
 Legacy format (also supported):
 [contentful-table id="XBIbkCm53nytLcsPx3jlw"]
@@ -686,6 +844,153 @@ Legacy format (also supported):
     }
 
     /**
+     * Get card rows from card data.
+     * Supports inline tableData, cached CSV, or downloads and caches the spreadsheet.
+     * 
+     * @param array $card_data Card data from JSON
+     * @return array Array of rows (first row = headers)
+     */
+    private function get_card_rows($card_data)
+    {
+        // Source 1: inline tableData (from card JSON with embedded data)
+        if (isset($card_data['source']['dataTable']['tableData'])) {
+            return $card_data['source']['dataTable']['tableData'];
+        }
+
+        // Source 2: rawData (pre-parsed CSV data in the JSON file)
+        if (isset($card_data['rawData']) && is_array($card_data['rawData'])) {
+            return $card_data['rawData'];
+        }
+
+        // Source 3: cached CSV file for this card
+        $card_id = $card_data['id'] ?? '';
+        if (!empty($card_id)) {
+            $csv_path = WP_CONTENT_DIR . '/contentful-cards/' . $card_id . '.csv';
+            if (file_exists($csv_path)) {
+                // Use WordPress transient cache to avoid re-parsing large CSV on every page load
+                $cache_key = 'ctfl_card_csv_' . substr(md5($card_id), 0, 16);
+                $cached = get_transient($cache_key);
+                if ($cached !== false) {
+                    return $cached;
+                }
+
+                $csv_content = file_get_contents($csv_path);
+                if ($csv_content !== false) {
+                    $rows = $this->parse_csv($csv_content);
+                    // Cache parsed data for 24 hours
+                    set_transient($cache_key, $rows, DAY_IN_SECONDS);
+                    return $rows;
+                }
+            }
+        }
+
+        // Source 4: download spreadsheet and cache locally
+        if (isset($card_data['source']['type']) && $card_data['source']['type'] === 'spreadsheet' && !empty($card_data['source']['url'])) {
+            $url = $card_data['source']['url'];
+            if (strpos($url, '//') === 0)
+                $url = 'https:' . $url;
+
+            $response = wp_remote_get($url, ['timeout' => 30]);
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $csv_content = wp_remote_retrieve_body($response);
+                if (!empty($csv_content)) {
+                    // Cache the CSV locally
+                    if (!empty($card_id)) {
+                        $csv_path = WP_CONTENT_DIR . '/contentful-cards/' . $card_id . '.csv';
+                        file_put_contents($csv_path, $csv_content);
+                    }
+                    return $this->parse_csv($csv_content);
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Format a header label from snake_case or slug to human-readable.
+     * Examples: "provider_name" → "Provider Name", "base_pricing_string" → "Base Pricing String"
+     * 
+     * @param string $header Raw header name
+     * @return string Formatted label
+     */
+    private function format_header_label($header)
+    {
+        // Replace underscores and hyphens with spaces
+        $label = str_replace(['_', '-'], ' ', $header);
+        // Remove trailing "string" suffix (e.g., "room_string" → "room")
+        $label = preg_replace('/\s+string$/i', '', $label);
+        // Title case
+        return ucwords(trim($label));
+    }
+
+    /**
+     * Resolve template placeholders in titles.
+     * 
+     * Supported placeholders:
+     *   [ city-state ] — replaced with "City, ST" from current post slug (e.g. "Birmingham, AL")
+     * 
+     * Modifiers (appended after the placeholder):
+     *   "lowercase" — output in lowercase (e.g. "birmingham, al")
+     * 
+     * @param string $title Title string possibly containing placeholders
+     * @return string Title with placeholders resolved
+     */
+    private function resolve_title_placeholders($title)
+    {
+        if (strpos($title, '[ city-state ]') === false && strpos($title, '[city-state]') === false) {
+            return $title;
+        }
+
+        $post = get_post();
+        if (!$post) {
+            return $title;
+        }
+
+        $slug = $post->post_name; // e.g. "birmingham-al"
+
+        // Try to extract city name and state abbreviation from slug
+        // Pattern: "city-name-XX" where XX is 2-letter state code
+        $parts = explode('-', $slug);
+        $state_abbr = '';
+        $city_parts = $parts;
+
+        if (count($parts) >= 2) {
+            $last = strtoupper(end($parts));
+            // Check if last segment is a 2-letter state abbreviation
+            if (strlen($last) === 2 && ctype_alpha($last)) {
+                $state_abbr = $last;
+                $city_parts = array_slice($parts, 0, -1);
+            }
+        }
+
+        // Build city name: capitalize each word
+        $city_name = implode(' ', array_map('ucfirst', $city_parts));
+
+        // Build replacement string
+        if ($state_abbr) {
+            $city_state = $city_name . ', ' . $state_abbr;
+        } else {
+            $city_state = $city_name;
+        }
+
+        // Detect "lowercase" modifier: "[ city-state ] lowercase"
+        $lowercase = false;
+        if (preg_match('/\[ ?city-state ?\]\s+lowercase/i', $title)) {
+            $lowercase = true;
+            // Remove the "lowercase" modifier from the title
+            $title = preg_replace('/(\[ ?city-state ?\])\s+lowercase/i', '$1', $title);
+        }
+
+        $replacement = $lowercase ? strtolower($city_state) : $city_state;
+
+        // Replace both "[ city-state ]" and "[city-state]" variants
+        $title = str_replace(['[ city-state ]', '[city-state]'], $replacement, $title);
+
+        return $title;
+    }
+
+    /**
      * Render chart shortcode [contentful_chart id="..." type="..." title="..."]
      */
     public function render_chart_shortcode($atts)
@@ -761,7 +1066,12 @@ Legacy format (also supported):
     }
 
     /**
-     * Render cards shortcode [contentful_cards id="..." type="..." title="..."]
+     * Render cards shortcode [contentful_cards id="..." type="..." title="..." filters="..."]
+     * 
+     * Supports key-based filtering similar to tables:
+     * - filters="birmingham-al" filters card rows by key column
+     * - filters="auto" auto-detects filter from current post slug
+     * - If no filters attribute but card has selectedKey, auto-filters by post slug
      */
     public function render_cards_shortcode($atts)
     {
@@ -770,11 +1080,13 @@ Legacy format (also supported):
             'type' => '',
             'title' => '',
             'class' => '',
+            'filters' => '',
         ], $atts, 'contentful_cards');
 
         $card_id = sanitize_text_field($atts['id']);
         $custom_title = sanitize_text_field($atts['title']);
         $custom_class = sanitize_text_field($atts['class']);
+        $filters_attr = sanitize_text_field($atts['filters']);
 
         if (empty($card_id)) {
             return '<!-- Cards: No ID specified -->';
@@ -783,29 +1095,92 @@ Legacy format (also supported):
         $card_data = $this->cards_data[$card_id] ?? null;
         $title = $custom_title ?: ($card_data['title'] ?? '');
 
+        // Resolve template placeholders like [ city-state ] from current post context
+        $title = $this->resolve_title_placeholders($title);
+
+        // Determine key filter: explicit filters attr, "auto", or auto-detect from card metadata
+        $key_filter = $filters_attr;
+        $has_selected_key = !empty($card_data['filters']['selectedKey']);
+
+        if (empty($key_filter) && $has_selected_key) {
+            // Auto-filter by post slug when card has selectedKey configured
+            $key_filter = 'auto';
+        }
+
+        if ($key_filter === 'auto') {
+            $post = get_post();
+            $key_filter = $post ? $post->post_name : '';
+        }
+
         $html = '<div class="contentful-cards' . ($custom_class ? ' ' . esc_attr($custom_class) : '') . '" id="contentful-cards-' . esc_attr($card_id) . '">';
 
         if (!empty($title)) {
             $html .= '<h3 class="cards-title">' . esc_html($title) . '</h3>';
         }
 
-        if ($card_data && isset($card_data['source'])) {
-            $source = $card_data['source'];
+        if ($card_data) {
+            $rows = $this->get_card_rows($card_data);
 
-            if ($source['type'] === 'table' && isset($source['dataTable']['tableData'])) {
-                $table_rows = $source['dataTable']['tableData'];
-                if (count($table_rows) > 0) {
-                    $headers = array_shift($table_rows);
+            if (!empty($rows)) {
+                $headers = array_shift($rows);
 
+                // Find key column index
+                $keyColIndex = -1;
+                if (!empty($key_filter)) {
+                    // Use stored keyColumnIndex or auto-detect
+                    $keyColIndex = $card_data['keyColumnIndex'] ?? -1;
+                    if ($keyColIndex < 0) {
+                        $lowercaseHeaders = array_map('strtolower', $headers);
+                        $keyColIndex = array_search('key', $lowercaseHeaders);
+                        if ($keyColIndex === false)
+                            $keyColIndex = -1;
+                    }
+                }
+
+                // Filter rows by key
+                if (!empty($key_filter) && $keyColIndex >= 0) {
+                    $rows = array_values(array_filter($rows, function ($row) use ($keyColIndex, $key_filter) {
+                        $rowKey = strtolower(trim($row[$keyColIndex] ?? ''));
+                        return $rowKey === strtolower($key_filter);
+                    }));
+                }
+
+                // Determine which columns to display (from selectedColumns or exclude key/slug)
+                $selected_columns = $card_data['filters']['selectedColumns'] ?? [];
+                $display_cols = [];
+
+                if (!empty($selected_columns)) {
+                    // Use selectedColumns from card metadata
+                    foreach ($selected_columns as $col) {
+                        $col_name = $col['name'] ?? '';
+                        $col_idx = array_search(strtolower($col_name), array_map('strtolower', $headers));
+                        if ($col_idx !== false) {
+                            $display_cols[] = (int) $col_idx;
+                        }
+                    }
+                }
+
+                if (empty($display_cols)) {
+                    // Fallback: show all columns except key and slug
+                    $hidden = ['key', 'slug'];
+                    for ($c = 0; $c < count($headers); $c++) {
+                        if (!in_array(strtolower($headers[$c]), $hidden)) {
+                            $display_cols[] = $c;
+                        }
+                    }
+                }
+
+                if (!empty($rows)) {
                     $html .= '<div class="cards-grid">';
-                    foreach ($table_rows as $row) {
+                    foreach ($rows as $row) {
                         $html .= '<div class="contentful-card">';
-                        foreach ($row as $i => $cell) {
-                            $header = $headers[$i] ?? '';
+                        foreach ($display_cols as $col_idx) {
+                            $header = $headers[$col_idx] ?? '';
+                            $cell = $row[$col_idx] ?? '';
                             if (!empty($cell)) {
                                 $html .= '<div class="card-field">';
                                 if ($header)
-                                    $html .= '<span class="card-label">' . esc_html($header) . ':</span> ';
+                                    $html .= '<span class="card-label">' . esc_html($this->format_header_label($header)) . ':</span> ';
                                 $html .= '<span class="card-value">' . wp_kses_post($cell) . '</span>';
                                 $html .= '</div>';
                             }
@@ -813,9 +1188,11 @@ Legacy format (also supported):
                         $html .= '</div>';
                     }
                     $html .= '</div>';
+                } else {
+                    $html .= '<p class="cards-placeholder">No listings found.</p>';
                 }
-            } elseif ($source['type'] === 'spreadsheet' && !empty($source['url'])) {
-                $html .= '<p class="cards-source">Data source: <a href="' . esc_url($source['url']) . '" target="_blank">Download data</a></p>';
+            } else {
+                $html .= '<p class="cards-placeholder">[Provider listings]</p>';
             }
         } else {
             $html .= '<p class="cards-placeholder">[Provider listings]</p>';
@@ -865,12 +1242,15 @@ Legacy format (also supported):
             'class' => '',
             'title' => '',
             'key' => '',
+            'filters' => '',
         ], $atts, 'contentful_table');
         
         $table_id = sanitize_text_field($atts['id']);
         $custom_class = sanitize_text_field($atts['class']);
         $custom_title = sanitize_text_field($atts['title']);
-        $key_filter = sanitize_text_field($atts['key']);
+        // Support both "filters" (preferred) and legacy "key" attribute
+        $filters_attr = sanitize_text_field($atts['filters']);
+        $key_filter = !empty($filters_attr) ? $filters_attr : sanitize_text_field($atts['key']);
         
         if (empty($table_id)) {
             return '<div class="contentful-error">Error: No table ID specified. Usage: [contentful_table id="your-table-id"]</div>';
@@ -1036,34 +1416,62 @@ Legacy format (also supported):
     }
     
     /**
-     * Filter table rows by matching a key value against a heading slug.
+     * Filter table rows by matching key column values against the filter parameter.
      * 
-     * The heading slug comes from the rich text converter (e.g., "area-agency-on-aging").
-     * The key values are single words from the CSV key column (e.g., "agency", "food").
+     * Supports two modes:
+     * 1. Direct key match: filters="food" matches rows where key column = "food"
+     * 2. Heading-slug resolution: filters="area-agency-on-aging" resolves to key "agency"
      * 
-     * Matching strategy:
-     * 1. Exact match: heading slug === key value
-     * 2. Contains match: heading slug contains the key value as a word
-     * 3. Starts-with match: heading slug starts with the key value
+     * Multiple filter values can be separated by commas:
+     *   filters="food,agency" matches rows where key = "food" OR key = "agency"
      * 
      * @param array $rows Data rows (without header)
      * @param int $keyColIndex Index of the key column
-     * @param string $headingSlug The heading slug from the shortcode key attribute
+     * @param string $filterParam The filter value(s) from the shortcode attribute (comma-separated)
      * @param array $keyValues Known key values from table metadata
      * @return array Filtered rows
      */
-    private function filter_rows_by_key($rows, $keyColIndex, $headingSlug, $keyValues = []) {
-        if (empty($headingSlug) || $keyColIndex < 0) return $rows;
+    private function filter_rows_by_key($rows, $keyColIndex, $filterParam, $keyValues = [])
+    {
+        if (empty($filterParam) || $keyColIndex < 0)
+            return $rows;
 
-        // First, resolve which actual key value this heading maps to
-        $matchedKey = $this->resolve_key_from_heading($headingSlug, $keyValues);
-        
-        if (empty($matchedKey)) return $rows;
+        // Parse comma-separated filter values
+        $filterValues = array_map('trim', explode(',', $filterParam));
+        $filterValues = array_filter($filterValues, function ($v) {
+            return $v !== '';
+        });
 
-        // Filter rows where key column matches
-        return array_values(array_filter($rows, function($row) use ($keyColIndex, $matchedKey) {
+        if (empty($filterValues))
+            return $rows;
+
+        // Resolve each filter value to an actual key
+        $matchedKeys = [];
+        foreach ($filterValues as $filter) {
+            $filter = strtolower($filter);
+
+            // Check if the filter value is already a direct key match
+            $lowercaseKeyValues = array_map('strtolower', array_map('trim', $keyValues));
+            if (in_array($filter, $lowercaseKeyValues)) {
+                $matchedKeys[] = $filter;
+            } else {
+                // Try to resolve as a heading slug
+                $resolved = $this->resolve_key_from_heading($filter, $keyValues);
+                if ($resolved) {
+                    $matchedKeys[] = $resolved;
+                }
+            }
+        }
+
+        if (empty($matchedKeys))
+            return $rows;
+
+        $matchedKeys = array_unique($matchedKeys);
+
+        // Filter rows where key column matches any of the resolved keys
+        return array_values(array_filter($rows, function ($row) use ($keyColIndex, $matchedKeys) {
             $rowKey = strtolower(trim($row[$keyColIndex] ?? ''));
-            return $rowKey === $matchedKey;
+            return in_array($rowKey, $matchedKeys);
         }));
     }
 
@@ -1148,21 +1556,27 @@ Legacy format (also supported):
             // Determine the key column index
             $keyColIndex = -1;
             $keyColName = $table_data['keyColumn'] ?? null;
-            
-            if (!empty($key_filter) && $keyColName) {
-                // Use stored keyColumnIndex
-                $keyColIndex = $table_data['keyColumnIndex'] ?? -1;
-                
-                // Fallback: find by column name
-                if ($keyColIndex < 0) {
-                    $keyColIndex = array_search($keyColName, $headers);
-                    if ($keyColIndex === false) $keyColIndex = -1;
+
+            if (!empty($key_filter)) {
+                if ($keyColName) {
+                    // Use stored keyColumnIndex from table metadata
+                    $keyColIndex = $table_data['keyColumnIndex'] ?? -1;
+
+                    // Fallback: find by column name in headers
+                    if ($keyColIndex < 0) {
+                        $keyColIndex = array_search($keyColName, $headers);
+                        if ($keyColIndex === false)
+                            $keyColIndex = -1;
+                    }
                 }
-            }
-            
-            // Legacy fallback: check if last column is named 'key'
-            if ($keyColIndex < 0 && !empty($key_filter) && end($headers) === 'key') {
-                $keyColIndex = count($headers) - 1;
+
+                // Auto-detect: look for a column named 'key' (case-insensitive)
+                if ($keyColIndex < 0) {
+                    $lowercaseHeaders = array_map('strtolower', $headers);
+                    $keyColIndex = array_search('key', $lowercaseHeaders);
+                    if ($keyColIndex === false)
+                        $keyColIndex = -1;
+                }
             }
             
             // Apply key-based row filtering if key is provided
@@ -1246,6 +1660,114 @@ Legacy format (also supported):
         $html .= '</div>';
         
         return $html;
+    }
+
+    /**
+     * WPGraphQL: Apply do_shortcode() to content fields in GraphQL responses.
+     *
+     * Hooks into graphql_resolve_field to process shortcodes (contentful_table,
+     * contentful_toc, contentful_chart, contentful_cards, contentful_form) so
+     * they render as HTML instead of raw shortcode text.
+     *
+     * @param mixed  $result         The resolved field value.
+     * @param mixed  $source         The source object (post, term, etc.).
+     * @param array  $args           The field arguments.
+     * @param mixed  $context        The AppContext.
+     * @param mixed  $info           The ResolveInfo.
+     * @param string $type_name      The GraphQL type name (e.g., 'Post', 'Page', 'Community').
+     * @param string $field_key      The field key (e.g., 'content', 'excerpt').
+     * @param mixed  $field_def      The field definition.
+     * @param mixed  $field_resolver The field resolver.
+     * @return mixed The result with shortcodes rendered as HTML.
+     */
+    public function graphql_resolve_shortcodes($result, $source, $args, $context, $info, $type_name, $field_key, $field_def, $field_resolver)
+    {
+        // Only process string results with content in target fields.
+        if (!is_string($result) || empty($result)) {
+            return $result;
+        }
+
+        // Only process known content fields.
+        $target_fields = ['content', 'excerpt'];
+        if (!in_array($field_key, $target_fields, true)) {
+            return $result;
+        }
+
+        // Only process known post type GraphQL types.
+        $target_types = ['Post', 'Page', 'Community'];
+        if (!in_array($type_name, $target_types, true)) {
+            return $result;
+        }
+
+        // Quick check: skip if no shortcode brackets present.
+        if (strpos($result, '[') === false) {
+            return $result;
+        }
+
+        return do_shortcode($result);
+    }
+
+    /**
+     * WPGraphQL: Register a dedicated renderedContent field on post types.
+     *
+     * Provides an explicit GraphQL field that always returns content with all
+     * shortcodes processed via do_shortcode(), without modifying the default
+     * content field behavior.
+     *
+     * Usage in GraphQL:
+     *   {
+     *     posts {
+     *       nodes {
+     *         title
+     *         renderedContent
+     *       }
+     *     }
+     *   }
+     */
+    public function graphql_register_rendered_content()
+    {
+        if (!function_exists('register_graphql_field')) {
+            return;
+        }
+
+        $post_types = [
+            'Post' => 'post',
+            'Page' => 'page',
+            'Community' => 'community',
+        ];
+
+        foreach ($post_types as $graphql_type => $wp_type) {
+            // Verify the post type exists before registering.
+            if (!post_type_exists($wp_type)) {
+                continue;
+            }
+
+            register_graphql_field($graphql_type, 'renderedContent', [
+                'type' => 'String',
+                'description' => 'Post content with all shortcodes rendered as HTML.',
+                'resolve' => function ($post) {
+                    $content = '';
+
+                    // WPGraphQL Post model exposes contentRaw.
+                    if (isset($post->contentRaw)) {
+                        $content = $post->contentRaw;
+                    } elseif (isset($post->ID)) {
+                        $post_object = get_post($post->ID);
+                        $content = $post_object ? $post_object->post_content : '';
+                    }
+
+                    if (empty($content)) {
+                        return '';
+                    }
+
+                    // Apply shortcodes and formatting.
+                    $content = do_shortcode($content);
+                    $content = wpautop($content);
+
+                    return $content;
+                },
+            ]);
+        }
     }
 }
 
